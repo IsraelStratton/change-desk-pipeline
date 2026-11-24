@@ -165,7 +165,7 @@ def run_eval(args) -> int:
         return 2
     import anthropic
 
-    playbook_path = Path(args.playbook) if args.playbook else PLAYBOOK
+    playbook_path = Path(args.playbook).resolve() if args.playbook else PLAYBOOK
     text = playbook_path.read_text(encoding="utf-8")
     cases_text = CASES.read_text(encoding="utf-8")
     bar_text = BAR.read_text(encoding="utf-8")
@@ -205,6 +205,8 @@ def run_eval(args) -> int:
     jobs = [(m, r, c) for m in models for r in range(1, rounds + 1) for c in cases]
     with ThreadPoolExecutor(max_workers=4) as pool:
         rows = list(pool.map(lambda j: one(*j), jobs))
+    EXPORTS.mkdir(exist_ok=True)  # the raw rows first, so a later failure loses no paid call
+    (EXPORTS / f"triage-eval-{stamp}-rows.json").write_text(json.dumps(rows, indent=1) + "\n", encoding="utf-8")
     summaries = {m: summarise([r for r in rows if r["model"] == m], bar) for m in models}
     out = {
         "run_id": f"eval-{stamp}", "ran_at": now_iso(), "today": today, "rounds": rounds, "cases": len(cases),

@@ -4,7 +4,7 @@ Who does what. The Code chat does every step it can from the command line. Israe
 
 If any screen shows a price, a trial, a card or a licence: stop and tell Israel.
 
-## Step 1. Two keys into this folder's .env (Israel, in Terminal)
+## Step 1. Two keys into this folder's .env (Israel, in Terminal; done 25/11/2026)
 
 This one command copies two lines from the GTM pipeline's `.env` into this folder's `.env`: `ANTHROPIC_API_KEY` (the Claude key: Claude Console workspace `gtm-pipeline`, US$10 monthly limit) and `N8N_API_KEY` (the local n8n's API key, used only by `scripts/n8n_publish.py`). It prints only their lengths, never the values.
 
@@ -23,7 +23,7 @@ Expected: `ANTHROPIC_API_KEY length 106` and `N8N_API_KEY length 289`.
 
 `setup_db.py` applies the four SQL files, makes the `changedesk_app` login with its password written straight into `.env` as `CHANGEDESK_DB_PASSWORD` (never printed), loads prices, goals and the settings, and proves the login's limits (12 checks). `load_history.py` loads the made-up history. `load_history.py --reset` puts the store back to the history for a demo.
 
-## Part B. One new n8n credential (COURSES 2ND clicks; Israel pastes the password)
+## Part B. One new n8n credential (COURSES 2ND clicks; Israel pastes the password; done 25/11/2026)
 
 n8n at http://localhost:5678, signed in as the owner. Credentials, Create credential. The name must match exactly: the workflows find their credentials by name.
 
@@ -35,7 +35,7 @@ n8n at http://localhost:5678, signed in as the owner. Credentials, Create creden
 | Host | `host.docker.internal` |
 | Database | `postgres` |
 | User | `changedesk_app` |
-| Password | Israel pastes `CHANGEDESK_DB_PASSWORD` from `.env` in `~/change-desk-pipeline` (open it with `open -e .env`, copy the part after `=`) |
+| Password | Israel pastes it. This copies it to the clipboard and shows nothing on screen: `grep '^CHANGEDESK_DB_PASSWORD=' ~/change-desk-pipeline/.env \| cut -d= -f2- \| tr -d '\n' \| pbcopy` |
 | Port | `54322` |
 | SSL | Disable |
 
@@ -43,7 +43,7 @@ Save. It shows "Connection tested successfully" when the password is right. This
 
 The Claude credential is reused, not made again: **Claude key gtm-pipeline-v2** (Header Auth) already holds the same key, and its reach fits this build.
 
-## Part C. Put the workflows in (Code chat)
+## Part C. Put the workflows in (Code chat; done 25/11/2026, all five off)
 
 ```bash
 .venv/bin/python scripts/n8n_publish.py publish

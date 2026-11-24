@@ -131,7 +131,7 @@ def test_confirm_workflow_form_and_choices():
     applied = run_node(FILES["confirm"], "Apply Choices", [{"json": {"decided_by": "desk-lead", "lane_CD_1002": "Confirm: small and quick",
                                                                       "note": "The instruction was ignored; the ask is small."}}],
                        {"Build Form": built})[0]["json"]
-    assert applied["rows"][0]["action"] == "confirmed" and "triage-playbook@1.0.0" in applied["rows"][0]["stamp"]
+    assert applied["rows"][0]["action"] == "confirmed" and f"triage-playbook@{build_n8n.playbook_meta()['version']}" in applied["rows"][0]["stamp"]
 
 
 def test_score_and_decide_workflows_build_their_forms():
@@ -154,3 +154,25 @@ def test_score_and_decide_workflows_build_their_forms():
                                                                                    decision_id="D-n8n-77-CD-0029", decided_by="desk-lead")]}}],
                       {"Apply Choices": applied})
     assert drafts[0]["json"]["request"]["model"] == "claude-haiku-5-5" and "CD-0029" in drafts[0]["json"]["request"]["messages"][0]["content"]
+
+
+def test_the_playbook_built_into_every_workflow_equals_skill_md():
+    """COURSES 2ND, 25/11/2026: every Code node that carries the playbook carries exactly skills/triage-playbook/SKILL.md,
+    and the confirmation stamp names the same version. A playbook edit without a rebuild fails here."""
+    import re
+
+    live = (REPO / "skills" / "triage-playbook" / "SKILL.md").read_text(encoding="utf-8")
+    version = re.search(r'^\s+version: "([0-9.]+)"', live, re.M)[1]
+    found = 0
+    decoder = json.JSONDecoder()
+    for key in FILES:
+        for n in wf(key)["nodes"]:
+            js = (n.get("parameters") or {}).get("jsCode") or ""
+            marker = "const PLAYBOOK_TEXT = "
+            if marker in js:
+                text, _ = decoder.raw_decode(js[js.index(marker) + len(marker):])
+                assert text == live, f"{FILES[key]} {n['name']}"
+                found += 1
+            if "playbook: { name: '" in js:
+                assert f"version: '{version}'" in js, f"{FILES[key]} {n['name']}"
+    assert found == 2  # Build Requests and Check Triage in the triage workflow

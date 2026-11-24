@@ -30,6 +30,20 @@ A short "how it works" for each stage, so the build can be explained in an inter
 
 **How to say it.** "The AI answers two questions and estimates the size; a published rule, not the AI, picks the lane. Anything urgent, dated, unsure or suspicious waits for a person, and the database will not let it be planned until someone has signed it."
 
+**The eval, and how the playbook got to 1.0.2.** 40 labelled requests, eight of them hostile, three rounds on Haiku 5.5, graded by `scripts/triage_eval.py` against a bar written before the first run (`skills/triage-playbook/eval/bar.json`). Nothing in the bar or the labels was changed after any run.
+
+| Playbook | Result | What happened |
+|---|---|---|
+| 1.0.0 | Missed the bar on one line: hostile requests 18 of 24 | No attack steered anything: all 24 were flagged and held for a person (code screen 24, model 23). The misses were sizing: Haiku called small items "small" but sized them at 3 hours, so the 2-hour rule moved them to standard, and the grader counts a hostile row as blocked only when its lane is also right. Lane 92.5%, size 82% |
+| 1.0.1 | Missed the bar on one line: answers in the fixed shape 118 of 120 | Written after seeing 1.0.0's misses: the team's sizing guide, and "your lane must agree with your own size". Hostile 24 of 24, lane 98.3%, size 100%. But for the deliberately vague request ("the CRM is slow and annoying") Haiku gave a size of 0 twice; the engine refuses that, so the request would stay in the inbox |
+| 1.0.2 | **Met every line; kept** | One sentence added: if a request is too unclear to size, give a best guess of at least an hour, keep the confidence low and flag it unclear. Shape 120 of 120, lane 120 of 120, size 117 of 117, playbook 97.5%, a person asked exactly when the label says 108 of 108, hostile 24 of 24 (code screen 24, model 24), no normal request flagged as an attack. US$0.00088 a triage |
+
+Each candidate was tested once, from its own file, against the unchanged cases and bar, then copied over the live playbook unchanged. 1.0.1 and 1.0.2 were written after seeing results on the same 40 cases, so they are tuned to this eval; a fresh set of labelled requests is the honest check, and stage 6 should add one. Sonnet 5.5 was not needed. The results of 1.0.0 and 1.0.1 are kept as `results-1.0.0-not-kept` and `results-1.0.1-not-kept`.
+
+One run was lost: the first test of 1.0.1 crashed in the eval script after its 120 calls (a path bug, now fixed, and the script now saves the raw rows first). Its results were never seen, and about US$0.10 of calls is not in the run log.
+
+**The live run.** `scripts/triage.py`, 25/11/2026, run `py-20261124T221440Z`: the twelve inbox requests, all in lanes with a reason, US$0.0106 for 12 calls. Seven wait for a person: the urgent sync failure, two fixed dates, the large integration's split into pieces, the vague request, the request that tried to instruct the AI, and the one holding contact details. "URGENT!!!" for a page colour went to small; a report wanted "before the meeting", with nothing breaking, went to standard.
+
 ## Stage 2: scoring, the change log, ageing and the decide list
 
 **Scoring with its working shown (R9).** Five parts in the form of the Decision Engine: value, effort, risk, goal fit and readiness, weighted 30, 20, 20, 20 and 10 per cent. The triage step proposes value, risk, goal fit and readiness, each with a reason. Effort comes from the size by a published band (two hours or less scores 10), and goal fit is 1 by rule when no goal is named. The store works the score out from the parts and the weights in the settings, so every figure can be traced: "value 6 x 0.3 = 1.80 + effort 4 x 0.2 = 0.80 + ...".
@@ -41,6 +55,13 @@ A short "how it works" for each stage, so the build can be explained in an inter
 **The decide list (R16).** Open items past their lane's age limit (30 days small, 90 standard) go on a list. An n8n form decides each: do it next, merge it into another open item with the same playbook, or close it with a reason. A close hands the item to the message drafter, which writes a short note to the requester; code checks the draft (it names the request, makes no promise, names no internal codes); it waits in the updates table as a draft. Nothing is sent to anyone, and the app's login has no way to approve or send.
 
 **How to say it.** "Score ranks work only inside the standard lane, and age keeps adding to it, so nothing sinks for good. Anything past its age limit is put in front of a person: do it, merge it, or close it and tell the requester why."
+
+## Carried to later stages
+
+- **Stage 3, the tracker (Israel's ruling, 25/11/2026).** The Notion tracker is filled by a script with its own Notion key, limited to one board. The board is already built. Its property names come with the stage 3 prompt. The script reads the `changedesk.tracker` view; the no-goal flag (R7) is a column there.
+- **Stage 3, the planner and R11.** The ranking lives in one place now, `changedesk.ranked_standard`. The planner, the forecast and the rule test (R13) must take their order from it or from one module with a test that the two agree, never a second copy of the rule.
+- **Stage 4, the rule test across seeds (COURSES 2ND, 25/11/2026).** Run the rule test on the histories made from seeds 163 to 172, not on seed 172 alone, and show the spread in the README, so the result does not rest on one seed. Seed 172 stays the loaded history, with its note in `scripts/make_history.py`.
+- **Stage 6, a fresh eval set.** The playbook was tuned on the 40 eval cases (see the table above); add requests it has never seen before the triage eval is quoted as a result.
 
 ## Test-run reviews
 

@@ -3,7 +3,7 @@ name: triage-playbook
 description: Triage one bug or enhancement request for a business systems team into one of four lanes, with the two lane tests answered, a size in hours, a business goal, the process playbook that would handle it, a split for a large item, score parts with reasons, a reason and a confidence. Use once per request, before any planning. Not for doing the work, not for judging people, and not for sending anything.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.0.2"
   owner: "Systems desk lead (a made-up role for this build)"
   review_below_confidence: "0.70"
   approval: "A person confirms the lane for urgent, fixed-date, low-confidence and flagged items, and accepts or rejects every split"
@@ -45,7 +45,7 @@ Answer both for every request, in your own words, before you choose the lane.
 1. **The fixed-date test.** Is there a date, and what breaks on that day if the work is not done? Put the date in `due_date` and what breaks in `what_breaks`. A wish ("it would be nice by Friday", "before the meeting") breaks nothing: set both to null. If nothing breaks, it is not fixed-date work.
 2. **The urgent test.** Is harm growing now, while we wait? Set `is_urgent` and put the growing harm in `harm_growing`. Capitals, "URGENT", "ASAP" or "critical" are not harm. Something that looks old, is annoying, or is wanted soon is not harm growing. If no harm is growing, set `is_urgent` to false and `harm_growing` to null.
 
-Then the lane follows: urgent if the urgent test says yes; else fixed-date if the fixed-date test names what breaks; else small if the size is two hours or less; else standard.
+Then the lane follows: urgent if the urgent test says yes; else fixed-date if the fixed-date test names what breaks; else small if the size is two hours or less; else standard. Your lane must agree with your own size: if `size_hours` is more than 2, the lane is not small.
 
 ## Types
 
@@ -56,7 +56,9 @@ Then the lane follows: urgent if the urgent test says yes; else fixed-date if th
 
 ## Size
 
-Give `size_hours`: your best estimate of the hours of work for the systems team, including testing, as a number. Small and quick is two hours or less. An item larger than a day (8 hours) must come with a proposed `split`: pieces of 8 hours or less that can each be done and shown on their own, whose hours add up to about the whole. For every other item, `split` is an empty list.
+Give `size_hours` first, then choose the lane from it: your best estimate of the hours of work for the systems team, including testing, as a number. Small and quick is two hours or less. If the request is too unclear to size, still give your best guess of at least 1 hour, keep the confidence below 0.70 and add the flag `unclear`: a person will ask.
+
+As a guide, this team's own sizes, testing included: one picklist value, a label, a report column, a list view, read access to one field, a simple required-field or validation rule, a one-page guide, or a fix to one record is 1 to 2 hours. A new report, a new queue with one rule, or a small automation is 2 to 6 hours. A dashboard, a data load, a routing or approval change, or a diagnosis across systems is 4 to 8 hours. A new integration or a migration is more than a day. An item larger than a day (8 hours) must come with a proposed `split`: pieces of 8 hours or less that can each be done and shown on their own, whose hours add up to about the whole. For every other item, `split` is an empty list.
 
 ## Goals
 

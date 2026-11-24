@@ -29,7 +29,8 @@ WHAT = {("triage", "eval"): "Triage eval (labelled requests)", ("triage", "pytho
 def render(rows: list[dict], prices: list[dict], totals: dict) -> str:
     lines = ["# Cost sheet", "",
              "Made by `scripts/cost_sheet.py` from the run log (`changedesk.run_log`) and the price table. Every call the AI steps made "
-             "is in it, failed ones too. Free tiers only: the Claude key's workspace has a US$10 monthly limit.", "",
+             "is in it, failed ones too. No paid plan: calls are billed to the build's capped Claude key (workspace gtm-pipeline, "
+             "US$10 monthly limit).", "",
              "| What | Model | Calls | Cost per call (US$) | Total (US$) | Average tokens in / out |", "|---|---|---|---|---|---|"]
     for r in rows:
         lines.append(f"| {WHAT.get((r['step'], r['source']), r['step'] + ', ' + r['source'])} | {r['model']} | {r['calls']} | "

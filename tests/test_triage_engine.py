@@ -67,7 +67,7 @@ def test_a_sure_small_item_is_set_without_a_person(triage_eng, pb, settings):
     assert [s["part"] for s in p["scores"]] == ["value", "effort", "risk", "goal_fit", "readiness"]
     effort = next(s for s in p["scores"] if s["part"] == "effort")
     assert effort["points"] == 10 and effort["set_by"] == "code (size rule)"
-    assert p["stamp"] == ("changedesk T-test-run-CD-1001 | claude-haiku-5-5 | triage-playbook@1.0.0 | proposed by triage_agent | "
+    assert p["stamp"] == (f"changedesk T-test-run-CD-1001 | claude-haiku-5-5 | triage-playbook@{pb['version']} | proposed by triage_agent | "
                           "2026-11-25T01:02:03Z")
     assert call["input_tokens"] == 3200 and call["output_valid"] and call["step"] == "triage"
     assert triage_eng.call("triageHandoff", p) is None
