@@ -1,0 +1,27 @@
+# Secrets: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Local run outputs never enter the repo
+data/
+exports/
+
+# Raw n8n exports may hold credential IDs: commit only the clean copy made by scripts/build_n8n.py
+n8n/*.raw.json
+n8n/*.local.json
+
+.DS_Store
+
+# Local agent settings and the session rules (private to this Mac)
+.claude/
+
+# Private values the pre-push check looks for (tool IDs, addresses, paths); never committed
+.prepush-private.local

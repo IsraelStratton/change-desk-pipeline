@@ -1,0 +1,10 @@
+{
+  "_about": "A few made-up business goals for the made-up company in this build. Triage links an item to one of them, or to none (R7 flags it). Goals are on items only: no person is scored.",
+  "goals": [
+    {"goal_id": "G1", "title": "Shorten the quote-to-cash cycle", "description": "Quotes, approvals, orders and invoices move without manual re-keying, so revenue lands sooner.", "owner_role": "Finance director"},
+    {"goal_id": "G2", "title": "Keep customer data accurate", "description": "Accounts, contacts and cases are complete and free of duplicates, so every team trusts what it reads.", "owner_role": "Head of operations"},
+    {"goal_id": "G3", "title": "Answer support cases faster", "description": "Cases reach the right queue first time and agents spend less time on admin.", "owner_role": "Support lead"},
+    {"goal_id": "G4", "title": "Give leaders one view of the pipeline", "description": "Reports and forecasts agree with finance, so planning meetings start from one set of numbers.", "owner_role": "Sales director"},
+    {"goal_id": "G5", "title": "Stay safe and compliant", "description": "Access, retention and audit duties are met on time, with evidence.", "owner_role": "Security and privacy owner"}
+  ]
+}

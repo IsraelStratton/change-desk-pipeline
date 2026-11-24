@@ -1,0 +1,181 @@
+{
+  "name": "Change Desk: intake form",
+  "nodes": [
+    {
+      "name": "Request Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "parameters": {
+        "formTitle": "Change Desk: ask for a change",
+        "formDescription": "Ask the business systems team for a fix or a change. This is a made-up desk for a showcase build: use made-up details only. Your request gets an id at once. A person, helped by an AI step that only proposes, puts it in a lane; nothing is sent to anyone.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Your role (not your name)",
+              "fieldName": "requester_role",
+              "fieldType": "text",
+              "requiredField": true,
+              "placeholder": "e.g. Support lead"
+            },
+            {
+              "fieldLabel": "Title",
+              "fieldName": "title",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "What do you need, and why?",
+              "fieldName": "body",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "A date it must be done by (optional)",
+              "fieldName": "requester_due_date",
+              "fieldType": "date",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "What breaks on that date if it is not done? (optional)",
+              "fieldName": "requester_says_breaks",
+              "fieldType": "textarea",
+              "requiredField": false
+            },
+            {
+              "fieldLabel": "Is something broken now? What harm is growing while it waits? (optional)",
+              "fieldName": "requester_says_harm",
+              "fieldType": "textarea",
+              "requiredField": false
+            }
+          ]
+        },
+        "options": {
+          "path": "changedesk-intake",
+          "buttonLabel": "Send the request"
+        }
+      },
+      "id": "ed917418-9e85-52ae-8fbd-d4a4fe762f39",
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "name": "Make Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// ===== n8n node: Make Request (run once for all items) =====\n// The form's answers, as the store's add_request function takes them. The text is data: nothing here reads it as instructions.\nconst f = $input.first().json;\nconst s = (k) => (f[k] === undefined || f[k] === null ? '' : String(f[k]).trim());\nreturn [{ json: { request: {\n  requester_role: s('requester_role'), title: s('title'), body: s('body'),\n  requester_due_date: s('requester_due_date').slice(0, 10), requester_says_breaks: s('requester_says_breaks'),\n  requester_says_harm: s('requester_says_harm'), via: `n8n intake form, execution ${$execution.id}`,\n} } }];\n"
+      },
+      "id": "4cc72563-baa2-557a-8054-7adad213d9a7",
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "name": "Add Request",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "executeOnce": true,
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Change Desk (Postgres)"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select changedesk.add_request($1::jsonb) as request_id;",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.request) }}"
+        }
+      },
+      "id": "8ec016b4-ac86-55e0-be16-56f7482a30d5",
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "name": "Done Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Done message\nreturn [{ json: { title: \"Request received\", message: `Your request is ${$json.request_id}. It waits in the inbox; the desk triages it by hand, and nothing is sent to anyone.` } }];\n"
+      },
+      "id": "50a34878-8f9b-51be-a334-c87f539cdffa",
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "name": "Done",
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "webhookId": "4daa3e49-ed0c-506e-9e3f-04917e593fd3",
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "text",
+        "completionTitle": "={{ $json.title }}",
+        "completionMessage": "={{ $json.message }}",
+        "options": {}
+      },
+      "id": "123de59f-b322-5f4e-8450-715997054453",
+      "position": [
+        880,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Request Form": {
+      "main": [
+        [
+          {
+            "node": "Make Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Make Request": {
+      "main": [
+        [
+          {
+            "node": "Add Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Request": {
+      "main": [
+        [
+          {
+            "node": "Done Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Done Message": {
+      "main": [
+        [
+          {
+            "node": "Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
