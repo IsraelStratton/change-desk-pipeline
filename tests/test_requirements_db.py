@@ -311,18 +311,22 @@ declare
   n integer;
   k integer;
   as_of date;
+  start date;
   top text;
   nid text;
 begin
+  -- Start on the day of the latest arrival, so no request already in the store joins the ranking
+  -- part-way through (CD-1119, from the intake form on 24/11/2026, did, after test run n8n-8906).
+  select max(arrived_at::date) into start from changedesk.requests;
   -- x: the lowest-scored standard item that has waited a week or more. n: the score of each week's new
   -- arrival, the next whole number above x's rank points today, so score alone would keep x below it.
-  select request_id, rank_points into x, x0 from changedesk.ranked_standard(date '2026-11-23')
+  select request_id, rank_points into x, x0 from changedesk.ranked_standard(start)
    where weeks_waited >= 1 order by score, rank limit 1;
   n := least(10, ceil(x0 + 0.001)::integer);
   update changedesk.settings set value = to_jsonb(__RATE__::numeric), changed_by = 'test', why = 'R11 test, rolled back'
    where key = 'age_points_per_week';
   for k in 0..7 loop
-    as_of := date '2026-11-23' + 7 * k;
+    as_of := start + 7 * k;
     insert into r11 select k, rank, rank_points from changedesk.ranked_standard(as_of) where request_id = x;
     -- The week's work: the top item that is not x is done, and one new item arrives with score n.
     select request_id into top from changedesk.ranked_standard(as_of) where request_id <> x order by rank limit 1;
@@ -369,7 +373,9 @@ def test_r11_an_old_items_rank_rises_week_by_week():
 
 def test_r16_the_decide_list_fills_from_the_sample_history(db):
     rows = desk_db.rows(db, "select * from changedesk.decide_list_at('2026-11-23')")
-    assert len(rows) >= 5
+    # Items a person has decided leave the list (test run n8n-8909 decided three of the seven), so count them too.
+    decided = db.execute("select count(distinct request_id) as n from changedesk.decisions where kind = 'decide'").fetchone()["n"]
+    assert len(rows) + decided >= 5 and len(rows) >= 3
     assert all(r["age_days"] > r["age_limit_days"] for r in rows)
     assert {r["lane"] for r in rows} == {"small", "standard"}
     limits = {r["lane"]: r["age_limit_days"] for r in rows}
@@ -391,7 +397,13 @@ def test_r16_do_next_merge_and_close_and_a_close_drafts_a_message(db, scoring_en
                  "decided_at": NOW, "stamp": "changedesk D-test-decide-m | no AI | decide list | merge by desk-lead (test) | t"})
     closed = db.execute("select changedesk.decide(%s::jsonb) as closed", (j(rows),)).fetchone()["closed"]
     assert [x["request_id"] for x in closed] == [a["request_id"]] and closed[0]["decided_by"] == "desk-lead (test)"
-    assert row(db, a["request_id"])["status"] == "Closed" and row(db, a["request_id"])["close_reason"].startswith("No longer needed")
+    assert row(db, a["request_id"])["status"] == "Closed" and row(db, a["request_id"])["close_reason"] == "No longer needed."
+    assert closed[0]["reason"] == "No longer needed."  # all the drafter is given: the item's own reason
+    # The reviewer's note is kept on each decision, and on no item (test run n8n-8909).
+    notes = {d["request_id"]: d for d in desk_db.rows(db, "select request_id, note, detail from changedesk.decisions where run_id = 'test-decide'")}
+    assert notes[a["request_id"]]["note"] == "Desk review, test." and notes[a["request_id"]]["detail"]["reason"] == "No longer needed."
+    assert notes[b["request_id"]]["note"] == "Desk review, test." and "reason" not in notes[b["request_id"]]["detail"]
+    assert "Desk review" not in str(desk_db.rows(db, "select note from changedesk.status_history where request_id = %s", (a["request_id"],)))
     assert row(db, b["request_id"])["do_next"] is True
     assert (row(db, c["request_id"])["status"], row(db, c["request_id"])["merged_into"]) == ("Merged", target["request_id"])
     left = {r["request_id"] for r in desk_db.rows(db, "select request_id from changedesk.decide_list")}

@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parents[1]
 SHEET = REPO / "docs" / "cost-sheet.md"
 WHAT = {("triage", "eval"): "Triage eval (labelled requests)", ("triage", "python"): "Triage, run by hand from Python",
         ("triage", "n8n"): "Triage, run from the n8n form", ("drafter", "n8n"): "Close message drafts (decide list)",
-        ("drafter", "python"): "Close message drafts, from Python"}
+        ("drafter", "python"): "Close message drafter probe, from Python (no draft stored)"}
 
 
 def render(rows: list[dict], prices: list[dict], totals: dict) -> str:

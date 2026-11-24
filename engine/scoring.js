@@ -15,7 +15,7 @@ var escapeHtml = C.escapeHtml;
 var isoSeconds = C.isoSeconds;
 // ---------------------------------------------------------------- end of imports
 
-const SCORING_ENGINE_VERSION = '1.0.0';
+const SCORING_ENGINE_VERSION = '1.0.1'; // 1.0.1 (25/11/2026): a decided item's reason is its own; the reviewer's note stays on the decision
 const SCORE_PARTS = ['value', 'effort', 'risk', 'goal_fit', 'readiness'];
 const PART_WORDS = { value: 'value', effort: 'effort', risk: 'risk', goal_fit: 'goal fit', readiness: 'readiness' };
 const LEAVE = 'Leave on the list for now';
@@ -174,8 +174,18 @@ function buildDecideForm(list, open, meta) {
     fields.push({ fieldLabel: `${r.request_id} ${scoreClip(r.title, 60)} (${r.age_days} days)`, fieldName: decideKey(r.request_id),
       fieldType: 'dropdown', requiredField: true, fieldOptions: { values: decideOptions(r, open).map((o) => ({ option: o })) } });
   }
-  fields.push({ fieldLabel: 'Your reason in your own words (added to each merge and close; optional)', fieldName: 'note', fieldType: 'textarea', requiredField: false });
+  fields.push({ fieldLabel: 'A note for the record (kept with your decisions, never put on an item or in a message; optional)',
+    fieldName: 'note', fieldType: 'textarea', requiredField: false });
   return fields;
+}
+
+// Each item's own reason, from the choice made for that item alone. The reviewer's note covers the
+// whole form (it may name other items or people), so it is kept on the decision row, never on the
+// item and never in what the message drafter reads.
+function ownReason(choice, mergeInto) {
+  if (choice === DO_NEXT) return '';
+  if (choice.startsWith(MERGE_PREFIX)) return `the same need as ${mergeInto}`;
+  return `${choice.slice(CLOSE_PREFIX.length).replace(/^./, (c) => c.toUpperCase())}.`;
 }
 
 function decideStamp(decisionId, action, who, at) {
@@ -195,18 +205,17 @@ function applyDecideChoices(list, open, form, meta) {
     if (!choice || choice === LEAVE) continue;
     if (!decideOptions(r, open).includes(choice)) throw new Error(`decide: unknown choice for ${r.request_id}`);
     const decisionId = `D-${String(m.run_id || 'run').replace(/[^A-Za-z0-9-]/g, '')}-${r.request_id}`;
-    const row = { decision_id: decisionId, run_id: m.run_id, request_id: r.request_id, decided_by: who, decided_at: at, merge_into: null, reason: '' };
+    const row = { decision_id: decisionId, run_id: m.run_id, request_id: r.request_id, decided_by: who, decided_at: at, merge_into: null,
+      reason: '', note };
     if (choice === DO_NEXT) {
       row.action = 'do_next';
-      row.reason = note;
     } else if (choice.startsWith(MERGE_PREFIX)) {
       row.action = 'merge';
       row.merge_into = choice.slice(MERGE_PREFIX.length).split(' ')[0];
-      row.reason = `the same need as ${row.merge_into}${note ? `. ${note}` : ''}`;
     } else {
       row.action = 'close';
-      row.reason = `${choice.slice(CLOSE_PREFIX.length).replace(/^./, (c) => c.toUpperCase())}${note ? `. ${note}` : '.'}`;
     }
+    row.reason = ownReason(choice, row.merge_into);
     row.stamp = decideStamp(decisionId, row.action === 'merge' ? `merge into ${row.merge_into}` : row.action, who, at);
     rows.push(row);
   }
@@ -217,6 +226,6 @@ function applyDecideChoices(list, open, form, meta) {
 
 const SCORING = {
   SCORING_ENGINE_VERSION, SCORE_PARTS, PART_WORDS, CLOSE_REASONS, LEAVE, DO_NEXT, sizeEffortPoints, scoreWithWorking, rankPoints,
-  buildScoreForm, applyScoreChange, mergeChoices, decideOptions, decideKey, buildDecideForm, applyDecideChoices, itemLabel,
+  buildScoreForm, applyScoreChange, mergeChoices, decideOptions, decideKey, buildDecideForm, ownReason, applyDecideChoices, itemLabel,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = SCORING;

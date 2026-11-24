@@ -298,3 +298,42 @@ create table if not exists changedesk.updates (
   check (status <> 'approved' or draft_problems = '')
 );
 comment on table changedesk.updates is 'Each draft: audience, text, the forecast run it used, who approved it and when. Nothing here is sent: an approved update goes to the outbox in stage 5.';
+
+-- ---------------------------------------------------------------- stages 3 and 4 (25/11/2026)
+
+-- The week's plan (R12): each row also says which step of the lanes rule put it there, and carries the stamp.
+alter table changedesk.week_plan add column if not exists why text not null default '';
+alter table changedesk.week_plan add column if not exists stamp text not null default '';
+comment on table changedesk.week_plan is 'The plan for each week: lane, item, hours and order, made by the plain-script planner (scripts/planner.py). The latest plan is the plan.';
+
+-- One row per forecast run (R18 to R21): what it ran on, so every figure it gives can be traced to its inputs.
+create table if not exists changedesk.forecast_runs (
+  run_id           text primary key,
+  purpose          text not null check (purpose in ('forecast', 'what-if')),
+  start_week       date not null check (extract(isodow from start_week) = 1),
+  rule             text not null check (rule in ('lanes', 'highest score first', 'value per hour first')),
+  runs             integer not null check (runs between 10 and 100000),
+  horizon_weeks    integer not null check (horizon_weeks between 1 and 104),
+  seed             integer not null,
+  load             numeric(4, 2) not null check (load > 0),
+  safe_start_days  integer not null check (safe_start_days >= 0),
+  settings         jsonb not null,
+  summary          jsonb not null default '{}'::jsonb,
+  made_by          text not null check (length(trim(made_by)) > 0),
+  made_at          timestamptz not null,
+  stamp            text not null check (stamp like 'changedesk %')
+);
+comment on table changedesk.forecast_runs is 'Each forecast run: the start week, the rule, the number of runs, the horizon, the seed, the load and the settings it used. A what-if run (another load or setting) never triggers an update.';
+
+-- Lane rows (request_id null) carry the lane's own figures: hours in and out a week in the run, and whether it grows.
+alter table changedesk.forecasts add column if not exists hours_in_per_week numeric(6, 1);
+alter table changedesk.forecasts add column if not exists hours_out_per_week numeric(6, 1);
+alter table changedesk.forecasts add column if not exists growing boolean;
+alter table changedesk.forecasts add column if not exists finished_share numeric(4, 3) check (finished_share between 0 and 1);
+create index if not exists forecasts_run_idx on changedesk.forecasts (run_id, request_id);
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'forecasts_run_fk') then
+    alter table changedesk.forecasts add constraint forecasts_run_fk foreign key (run_id) references changedesk.forecast_runs (run_id);
+  end if;
+end $$;

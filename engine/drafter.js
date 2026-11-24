@@ -18,7 +18,7 @@ var normaliseHttp = C.normaliseHttp;
 var isoSeconds = C.isoSeconds;
 // ---------------------------------------------------------------- end of imports
 
-const DRAFTER_VERSION = '1.0.0';
+const DRAFTER_VERSION = '1.0.1'; // 1.0.1 (25/11/2026): the promise check reads one sentence at a time
 const DRAFTER_NAME = 'close-message';
 const DRAFT_FLAGS = ['possible_injection', 'personal_data'];
 const DRAFT_KEYS = ['subject', 'body', 'flags'];
@@ -87,6 +87,20 @@ function buildCloseDraftRequest(closed, model, opts) {
   };
 }
 
+const PROMISE_RE = /\b(we will|we'll|will be (done|delivered|fixed)|by (monday|tuesday|wednesday|thursday|friday|next week|the end of))\b/i;
+// Rule 3 asks the drafter to say how to ask again. "Raise a new request and we will take a fresh look
+// at it" is that invitation, not a promise about the closed request; the drafter words it many ways
+// (probe py-probe-20261124T225412Z). So a sentence that names a new request may say "we will", as
+// long as it promises no delivery and no date. Each sentence is read on its own.
+const DELIVERY_RE = /\b(deliver(ed|s)?|done|fix(ed)?|finish(ed)?|complete(d)?|buil[dt]|ship(ped)?|ready|tomorrow|today|next week|by (monday|tuesday|wednesday|thursday|friday|the end of)|within)\b/i;
+
+function makesPromise(text) {
+  return String(text || '').split(/(?<=[.!?])\s+|\n+/).some((s) => {
+    if (!PROMISE_RE.test(s)) return false;
+    return !(/\bnew request\b/i.test(s) && !DELIVERY_RE.test(s));
+  });
+}
+
 // Checked in code before anyone sees it.
 function draftProblems(closed, d) {
   const problems = [];
@@ -101,10 +115,7 @@ function draftProblems(closed, d) {
     problems.push('it names how the desk works inside (scores, lanes, codes or the AI)');
   }
   if (EMAIL_RE.test(text) || (text.match(PHONE_RE) || []).some((p) => p.replace(/\D/g, '').length >= 8)) problems.push('it holds contact details');
-  if (/\b(we will|we'll|will be (done|delivered|fixed)|by (monday|tuesday|wednesday|thursday|friday|next week|the end of))\b/i.test(text)
-      && !/\b(we will|we'll) (look at|consider|review) (a|any|your) new request\b/i.test(text)) {
-    problems.push('it makes a promise');
-  }
+  if (makesPromise(text)) problems.push('it makes a promise');
   const source = wordGrams(REPEAT_SOURCE, 8);
   for (const g of wordGrams(text, 8)) if (source.has(g)) { problems.push('it repeats the instructions'); break; }
   return problems;
@@ -179,6 +190,6 @@ function checkCloseDraft(closed, http, ctx) {
 
 const DRAFTER = {
   DRAFTER_VERSION, DRAFTER_NAME, DRAFTER_BRIEF, DRAFT_FLAGS, drafterBrief, closeRecord, draftSchema, buildCloseDraftRequest,
-  draftProblems, checkCloseDraft, draftStamp,
+  draftProblems, makesPromise, checkCloseDraft, draftStamp,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = DRAFTER;

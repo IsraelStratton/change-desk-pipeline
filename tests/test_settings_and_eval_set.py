@@ -25,7 +25,7 @@ def test_the_shares_add_up_to_the_week():
 def test_build_additions_are_marked_as_such():
     rows = json.loads((REPO / "settings" / "settings.json").read_text(encoding="utf-8"))["settings"]
     extra = {r["key"]: r["source"] for r in rows if r["key"] not in SECTION_7}
-    assert set(extra) == {"large_item_hours", "effort_points_by_size"}
+    assert set(extra) == {"large_item_hours", "effort_points_by_size", "forecast_runs", "forecast_horizon_weeks", "forecast_seed"}
     assert all(s.startswith("build addition") for s in extra.values())
 
 

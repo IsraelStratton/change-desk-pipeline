@@ -40,6 +40,7 @@ PASSWORD_KEY = "CHANGEDESK_DB_PASSWORD"
 WRITE_FUNCTIONS = [
     "add_request(jsonb)", "log_triage(jsonb, jsonb, jsonb)", "confirm_lanes(jsonb)", "change_score(jsonb)",
     "decide(jsonb)", "log_drafts(jsonb, jsonb, jsonb)", "set_setting(text, jsonb, text, text)",
+    "save_plan(jsonb)", "log_forecast(jsonb, jsonb, jsonb)",
 ]
 READ_FUNCTIONS = ["setting(text)", "setting_num(text)", "effort_points(numeric)", "ranked_standard(date)", "decide_list_at(date)"]
 

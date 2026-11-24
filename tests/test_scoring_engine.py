@@ -82,11 +82,55 @@ def test_r16_choices_become_stamped_rows_and_a_close_has_a_reason(scoring_eng):
             "note": "Agreed at the desk review."}
     rows = scoring_eng.call("applyDecideChoices", DECIDE, OPEN, form, {"run_id": "n8n-9", "decided_at": "2026-11-25T04:00:00.000Z"})
     by = {r["request_id"]: r for r in rows}
-    assert by["CD-0029"]["action"] == "close" and by["CD-0029"]["reason"] == "No longer needed. Agreed at the desk review."
+    assert by["CD-0029"]["action"] == "close" and by["CD-0029"]["reason"] == "No longer needed."
     assert by["CD-0016"]["action"] == "merge" and by["CD-0016"]["merge_into"] == "CD-0140"
+    assert by["CD-0016"]["reason"] == "the same need as CD-0140"
+    assert all(r["note"] == "Agreed at the desk review." for r in rows)  # the note goes on each decision, not into a reason
     assert by["CD-0029"]["stamp"].endswith("| close by desk-lead | 2026-11-25T04:00:00Z")
     left = scoring_eng.call("applyDecideChoices", DECIDE, OPEN, {"decided_by": "x", "decide_CD_0029": "Leave on the list for now"}, {"run_id": "r"})
     assert left == []
+
+
+# The reviewer's note from test run n8n-8909, word for word: it covers the whole form, names a person and two other items.
+SHARED_NOTE = ("Test run on Israel's delegation. CD-0016 is the oldest standard item. CD-0029 is closed as no longer needed. "
+               "CD-0037 is merged into CD-0145, which asks for the same thing.")
+
+
+def test_a_shared_note_never_becomes_an_items_reason_or_reaches_the_drafter(scoring_eng, drafter_eng):
+    """Test run n8n-8909: the note was copied into CD-0029's close reason, and the drafter, reading a person's name and
+    other items in the reason, flagged the draft possible_injection and personal_data."""
+    form = {"decided_by": "courses-2nd (delegated)", "decide_CD_0029": "Close: no longer needed", "decide_CD_0016": "Do it next", "note": SHARED_NOTE}
+    rows = scoring_eng.call("applyDecideChoices", DECIDE, OPEN, form, {"run_id": "n8n-8909", "decided_at": "2026-11-24T22:25:34Z"})
+    by = {r["request_id"]: r for r in rows}
+    assert by["CD-0029"]["reason"] == "No longer needed." and by["CD-0016"]["reason"] == ""
+    assert all(r["note"] == SHARED_NOTE for r in rows)
+    record = drafter_eng.call("closeRecord", dict(CLOSED, reason=by["CD-0029"]["reason"]))
+    assert record["reason_for_closing"] == "No longer needed."
+    content = drafter_eng.call("buildCloseDraftRequest", dict(CLOSED, reason=by["CD-0029"]["reason"]), "claude-haiku-5-5")["messages"][0]["content"]
+    for leaked in ("Israel", "CD-0016", "CD-0037", "CD-0145", "delegation"):
+        assert leaked not in content
+
+
+def test_the_test_run_draft_passes_the_code_check(drafter_eng):
+    """U-n8n-8909-CD-0029, word for word. It read clean, but the old check called its last sentence a promise."""
+    body = ("Hello,\n\nThank you for your request CD-0029, \"Two-minute guide to merging Opportunity records\", which you raised on "
+            "30 August 2026. We have closed this request because it is no longer needed.\n\nIf the need comes back or your situation "
+            "has changed, please raise a new request through the desk's intake form and we will be glad to look at it again.\n\n"
+            "Thank you for your patience and for reaching out.")
+    assert drafter_eng.call("draftProblems", CLOSED, {"subject": "Your request CD-0029 has been closed", "body": body}) == []
+
+
+@pytest.mark.parametrize("text,promise", [
+    ("Please raise a new request and we will be glad to look at it again.", False),
+    ("If it comes back, send a new request and we'll consider it.", False),
+    ("Please raise a new request through the desk's intake form and we will take a fresh look at it.", False),  # probe draft #2
+    ("Send a new request and we will have it ready within a week.", True),
+    ("Raise a new request and we will deliver it next week.", True),     # the ask-again words do not cover a delivery
+    ("We will look at it again soon.", True),                            # no new request: a promise about the closed one
+    ("We closed it. A new request is welcome. We will have it done by Friday.", True),
+])
+def test_the_promise_check_reads_one_sentence_at_a_time(drafter_eng, text, promise):
+    assert drafter_eng.call("makesPromise", text) is promise
 
 
 # ---------------------------------------------------------------- the message drafter
@@ -110,7 +154,7 @@ def test_r16_a_good_draft_is_logged_as_a_draft_with_a_stamp(drafter_eng):
     out = drafter_eng.call("checkCloseDraft", CLOSED, fake_claude(good), {"run_id": "n8n-9", "model": "claude-haiku-5-5", "now": "2026-11-25T04:01:00Z"})
     d = out["draft"]
     assert d["audience"] == "requester" and d["kind"] == "close" and d["draft_problems"] == ""
-    assert d["stamp"] == "changedesk U-n8n-9-CD-0029 | claude-haiku-5-5 | close-message@1.0.0 | drafted by message_drafter | 2026-11-25T04:01:00Z"
+    assert d["stamp"] == "changedesk U-n8n-9-CD-0029 | claude-haiku-5-5 | close-message@1.0.1 | drafted by message_drafter | 2026-11-25T04:01:00Z"
     assert out["handoff"]["to_agent"] == "message_drafter" and out["call"]["step"] == "drafter"
 
 

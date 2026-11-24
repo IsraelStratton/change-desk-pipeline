@@ -19,7 +19,10 @@ What publish does, so nothing is clicked by hand and nothing drifts:
 check reads each live workflow and reports any node, setting or connection that differs from the file
 (positions and IDs aside). n8n leaves out a parameter that equals the node's default, so a key the file
 sets and n8n does not hold is taken as that default; every value n8n does hold must equal the file's, and
-every Code node's JavaScript must match in full.
+every Code node's JavaScript must match in full. n8n 2.x runs a workflow's published version, not its
+saved draft, so check also reads the published version when there is one: an active workflow's must be
+its latest saved version and match the file, and an inactive one must have none (Publish and Unpublish
+in the n8n screens save a named version; that alone is no difference).
 
 No workflow has a schedule. A form only answers while its workflow is on; turn them off after a session.
 The n8n API key is read from .env (N8N_API_KEY) and never printed.
@@ -124,6 +127,27 @@ def differences(live: dict, wanted: dict) -> list[str]:
     return out
 
 
+def as_workflow(live: dict, version: dict) -> dict:
+    """A saved version from n8n's workflow history, in the shape differences() reads."""
+    return {"name": live["name"], "nodes": version["nodes"], "connections": version["connections"], "settings": live.get("settings")}
+
+
+def published_problems(live: dict, published: dict | None, wanted: dict) -> list[str]:
+    """n8n 2.x runs the published version, not the saved draft. Publish and Unpublish in the n8n screens
+    also save a named version. So: an active workflow must have a published version, that version must be
+    the latest saved one, and it must match the file. An inactive one must have none."""
+    active_id = live.get("activeVersionId")
+    if not live.get("active"):
+        return [f"it is off but still has a published version ({active_id})"] if active_id else []
+    if not active_id or published is None:
+        return ["it is on but n8n reports no published version"]
+    out = []
+    if active_id != live.get("versionId"):
+        out.append("the published version is not the latest saved version")
+    out += [f"published version: {d}" for d in differences(as_workflow(live, published), wanted)]
+    return out
+
+
 def request_body(wanted: dict, live: dict | None, trigger: str) -> dict:
     """What is sent to n8n: the file's workflow, with the form trigger's webhook ID kept from the live copy
     or, for a trigger that has none, a new one (n8n registers no webhook without it)."""
@@ -175,7 +199,11 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"NOT IN N8N '{t['name']}'")
                     ok = False
                     continue
-                diff = differences(live, with_credential_ids(build.build(k), credentials))
+                wanted = with_credential_ids(build.build(k), credentials)
+                diff = differences(live, wanted)
+                active_id = live.get("activeVersionId")
+                published = n8n.call("GET", f"/workflows/{live['id']}/{active_id}") if active_id else None
+                diff += published_problems(live, published, wanted)
                 for d in diff:
                     print(f"DIFFERS {t['name']}: {d}")
                 ok = ok and not diff
@@ -187,10 +215,17 @@ def main(argv: list[str] | None = None) -> int:
                     ok = False
                     continue
                 n8n.call("POST", f"/workflows/{live['id']}/{'activate' if args.action == 'on' else 'deactivate'}", {})
+                now = n8n.call("GET", f"/workflows/{live['id']}")
                 status = ""
                 if args.action == "on":
                     form_url = f"{base.rstrip('/')}/form/{t['form_path']}"
                     status = f" Form /form/{t['form_path']}: HTTP {requests.get(form_url, timeout=15).status_code}."
+                    if now.get("activeVersionId") != now.get("versionId"):
+                        status += " WARNING the published version is not the latest saved one: run check."
+                        ok = False
+                elif now.get("active") or now.get("activeVersionId"):
+                    status = " WARNING n8n still reports it on or published: run check."
+                    ok = False
                 print(f"'{t['name']}' is {args.action}.{status}")
     except LookupError as e:
         print(f"CANNOT RUN {e}")

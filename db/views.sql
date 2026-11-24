@@ -50,7 +50,9 @@ group by request_id, title, lane, status;
 
 -- R11 and "score alone never sets the order": the standard lane ranked by score plus points for
 -- each whole week waited, at the rate in the setting age_points_per_week. "Do it next" from the
--- decide list comes first. Waiting work only (Triaged or Planned).
+-- decide list comes first. Open work: Triaged, Planned, and (from stage 3) In progress, so the
+-- planner can place work already started by the same rule. scripts/planner.py (standard_order)
+-- ranks the same way for the forecast and the rule test; tests/test_planner_db.py checks they agree.
 create or replace function changedesk.ranked_standard(as_of date) returns table (
   rank integer, request_id text, title text, status text, score numeric, weeks_waited integer,
   age_points numeric, rank_points numeric, do_next boolean, awaiting_confirmation boolean,
@@ -62,7 +64,7 @@ language sql stable set search_path = changedesk, pg_temp as $$
       greatest(0, floor((as_of - r.arrived_at::date) / 7.0))::integer as weeks_waited, t.working
     from changedesk.requests r
     join changedesk.score_totals t on t.request_id = r.request_id and t.parts = 5
-    where r.lane = 'standard' and r.status in ('Triaged', 'Planned') and r.arrived_at::date <= as_of
+    where r.lane = 'standard' and r.status in ('Triaged', 'Planned', 'In progress') and r.arrived_at::date <= as_of
   )
   select (row_number() over (order by s.do_next desc, s.score + s.weeks_waited * changedesk.setting_num('age_points_per_week') desc, s.arrived_at, s.request_id))::integer,
     s.request_id, s.title, s.status, s.score, s.weeks_waited,
@@ -123,21 +125,6 @@ from changedesk.requests where status = 'New';
 
 -- ---------------------------------------------------------------- the tracker and lane health
 
--- What the Notion board (stage 3) shows: one row per open item, grouped by lane, with its reason
--- and its flags. R7: an item with no business goal shows the no_goal flag.
-create or replace view changedesk.tracker as
-select r.request_id, r.title, r.lane, r.status, r.type, r.size_hours, r.requester_role, r.goal_id, g.title as goal,
-  r.playbook, r.triage_reason, r.confidence, r.due_date, r.urgent_harm,
-  (r.goal_id is null) as no_goal,
-  concat_ws('|', nullif(r.flags, ''), case when r.goal_id is null then 'no_goal' end) as flags,
-  (r.needs_confirmation and r.lane_confirmed_by is null) as awaiting_confirmation,
-  r.lane_confirmed_by, t.score, r.do_next, r.arrived_at::date as arrived_on,
-  (current_date - r.arrived_at::date) as age_days
-from changedesk.requests r
-left join changedesk.goals g on g.goal_id = r.goal_id
-left join changedesk.score_totals t on t.request_id = r.request_id
-where r.status in ('New', 'Triaged', 'Planned', 'In progress');
-
 -- When each request ended (Done, Merged, Closed or Split), from its status history.
 create or replace view changedesk.request_ends as
 select r.request_id, r.lane, r.arrived_at, r.due_date,
@@ -181,6 +168,40 @@ select g.lane, g.week_start,
     where g.lane = 'urgent' and r.lane = 'urgent' and wl.week_start = g.week_start) as urgent_hours_beyond_buffer
 from grid g
 order by g.week_start, array_position(array['urgent', 'fixed_date', 'standard', 'small'], g.lane);
+
+-- What the Notion board shows (stage 3, scripts/sync_tracker.py): one row for every request, open
+-- or ended, with what triage found, its rank points, its age, its planned week and its latest
+-- forecast. R7: an item with no business goal shows the no_goal flag. For an ended item the age and
+-- the waiting points stop on the day it ended. The board shows roles only: the sync script maps
+-- lane_confirmed_by to a role and never copies a reviewer's label.
+drop view if exists changedesk.tracker;
+create view changedesk.tracker as
+with latest_forecast as (
+  select run_id from changedesk.forecast_runs where purpose = 'forecast' order by made_at desc, run_id desc limit 1
+), latest_plan as (
+  select distinct on (p.request_id) p.request_id, p.week_start, p.plan_id
+  from changedesk.week_plan p order by p.request_id, p.made_at desc, p.plan_id desc
+)
+select r.request_id, r.title, r.lane, r.status, r.type, r.size_hours, r.requester_role, r.goal_id, g.title as goal,
+  r.playbook, r.triage_reason, r.close_reason, r.merged_into, r.confidence, r.due_date, r.due_breaks, r.urgent_harm,
+  (r.goal_id is null and r.status <> 'New') as no_goal,
+  concat_ws('|', nullif(r.flags, ''), case when r.goal_id is null and r.status <> 'New' then 'no_goal' end) as flags,
+  (r.needs_confirmation and r.lane_confirmed_by is null) as awaiting_confirmation,
+  r.lane_confirmed_by, t.score, r.do_next, r.arrived_at::date as arrived_on, e.ended_at::date as ended_on,
+  (coalesce(e.ended_at::date, current_date) - r.arrived_at::date) as age_days,
+  case when r.lane = 'standard' and t.score is not null then
+    round(t.score + greatest(0, floor((coalesce(e.ended_at::date, current_date) - r.arrived_at::date) / 7.0))
+                    * changedesk.setting_num('age_points_per_week'), 2) end as rank_points,
+  exists (select 1 from changedesk.decide_list d where d.request_id = r.request_id) as past_age_limit,
+  lp.week_start as planned_week, lp.plan_id,
+  f.run_id as forecast_run_id, f.kind as forecast_kind, f.p50, f.p85, f.p95, f.service_level_days, f.chance,
+  f.latest_safe_start, f.note as forecast_note
+from changedesk.requests r
+left join changedesk.goals g on g.goal_id = r.goal_id
+left join changedesk.score_totals t on t.request_id = r.request_id
+left join changedesk.request_ends e on e.request_id = r.request_id
+left join latest_plan lp on lp.request_id = r.request_id
+left join changedesk.forecasts f on f.request_id = r.request_id and f.run_id = (select run_id from latest_forecast);
 
 -- One query from a stamp to the whole triage record: the request, what the AI proposed and what
 -- it cost, and who confirmed the lane.

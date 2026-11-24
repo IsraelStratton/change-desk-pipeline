@@ -266,6 +266,11 @@ end $$;
 -- Each row: do it next, merge it into another open item, or close it with a reason. Only an item
 -- on the decide list on the day of the decision can be decided here. Returns the closed items, for
 -- the message drafter.
+--
+-- Two texts, kept apart (fixed 25/11/2026 after test run n8n-8909): "reason" is the item's own
+-- reason, from the choice made for that item; it becomes the close reason and the history note, and
+-- it is all the drafter reads. "note" is the reviewer's note for the whole form, which may name other
+-- items or people; it is kept on the decision row only.
 create or replace function changedesk.decide(rows jsonb) returns jsonb
 language plpgsql security definer set search_path = changedesk, pg_temp as $$
 declare
@@ -321,8 +326,9 @@ begin
     end if;
     insert into changedesk.decisions (decision_id, run_id, request_id, kind, action, detail, decided_by, decided_at, note, stamp)
     values (d ->> 'decision_id', d ->> 'run_id', req.request_id, 'decide', d ->> 'action',
-      jsonb_strip_nulls(jsonb_build_object('merge_into', d ->> 'merge_into', 'age_days', at::date - req.arrived_at::date)),
-      who, at, coalesce(d ->> 'reason', ''), d ->> 'stamp');
+      jsonb_strip_nulls(jsonb_build_object('merge_into', d ->> 'merge_into', 'age_days', at::date - req.arrived_at::date,
+        'reason', nullif(trim(coalesce(d ->> 'reason', '')), ''))),
+      who, at, trim(coalesce(d ->> 'note', '')), d ->> 'stamp');
   end loop;
   return closed;
 end $$;
@@ -376,6 +382,144 @@ begin
   if jsonb_typeof(old) <> jsonb_typeof(v) then
     raise exception 'setting % holds a %, not a %', k, jsonb_typeof(old), jsonb_typeof(v);
   end if;
-  update changedesk.settings set value = v, changed_by = trim(who), changed_at = now(), why = trim(why) where key = k;
+  -- The parameter is named in full: the table has a column called why too (found 25/11/2026, stage 3).
+  update changedesk.settings set value = v, changed_by = trim(who), changed_at = now(), why = trim(set_setting.why) where key = k;
   return jsonb_build_object('key', k, 'from', old, 'to', v);
+end $$;
+
+-- ---------------------------------------------------------------- the week's plan (stage 3, R12 to R14)
+
+-- One plan from scripts/planner.py: {plan_id, week_start, made_by, made_at, stamp, rows: [{request_id,
+-- lane, hours, position, why}]}. The latest plan is the plan: its items move to Planned (In progress
+-- stays as it is), and an item Planned by an earlier plan but left out of this one goes back to
+-- Triaged. Every row is checked here as well as in the planner: the item is open, in that lane, not
+-- waiting for a person (the week_plan trigger, R5) or a split decision, and given no more hours than it
+-- has left; the plan holds no more hours than the week (setting hours_per_week).
+create or replace function changedesk.save_plan(p jsonb) returns integer
+language plpgsql security definer set search_path = changedesk, pg_temp as $$
+declare
+  r jsonb;
+  req changedesk.requests%rowtype;
+  pid text := nullif(trim(coalesce(p ->> 'plan_id', '')), '');
+  who text := nullif(trim(coalesce(p ->> 'made_by', '')), '');
+  wk date := (p ->> 'week_start')::date;
+  at timestamptz := (p ->> 'made_at')::timestamptz;
+  st text := coalesce(p ->> 'stamp', '');
+  hrs numeric;
+  logged numeric;
+  total numeric := 0;
+  n integer := 0;
+  ids text[] := '{}';
+begin
+  if jsonb_typeof(p) <> 'object' or jsonb_typeof(p -> 'rows') <> 'array' then
+    raise exception 'save_plan expects {plan_id, week_start, made_by, made_at, stamp, rows: [...]}';
+  end if;
+  if pid is null or who is null or at is null or st not like 'changedesk %' then
+    raise exception 'a plan needs an id, who made it, when, and a stamp';
+  end if;
+  if extract(isodow from wk) <> 1 then
+    raise exception 'a plan starts on a Monday, not %', wk;
+  end if;
+  if exists (select 1 from changedesk.week_plan where plan_id = pid) then
+    raise exception 'plan % is saved already', pid;
+  end if;
+  for r in select * from jsonb_array_elements(p -> 'rows') loop
+    select * into req from changedesk.requests where request_id = r ->> 'request_id' for update;
+    if req.request_id is null then
+      raise exception 'no request %', r ->> 'request_id';
+    end if;
+    if req.status not in ('Triaged', 'Planned', 'In progress') then
+      raise exception 'request % is %, not open work', req.request_id, req.status;
+    end if;
+    if r ->> 'lane' is distinct from req.lane then
+      raise exception 'request % is in lane %, not %', req.request_id, req.lane, r ->> 'lane';
+    end if;
+    if req.split_proposal is not null and jsonb_array_length(req.split_proposal) > 0 and req.split_decision is null then
+      raise exception 'request % waits for a person to accept or reject its split', req.request_id;
+    end if;
+    hrs := (r ->> 'hours')::numeric;
+    logged := coalesce((select sum(w.hours) from changedesk.work_log w where w.request_id = req.request_id), 0);
+    if hrs is null or hrs <= 0 or hrs > req.size_hours - logged + 0.05 then
+      raise exception 'request % has % hours left, not %', req.request_id, req.size_hours - logged, hrs;
+    end if;
+    insert into changedesk.week_plan (plan_id, week_start, lane, request_id, hours, position, made_at, made_by, why, stamp)
+    values (pid, wk, req.lane, req.request_id, round(hrs, 1), (r ->> 'position')::integer, at, who, coalesce(r ->> 'why', ''), st);
+    total := total + hrs;
+    n := n + 1;
+    ids := ids || req.request_id;
+  end loop;
+  if n = 0 then
+    raise exception 'a plan with no rows plans nothing';
+  end if;
+  if total > changedesk.setting_num('hours_per_week') + 0.05 then
+    raise exception 'the plan holds % hours, more than the week''s %', total, changedesk.setting_num('hours_per_week');
+  end if;
+  if (select count(distinct position) from changedesk.week_plan where plan_id = pid) <> n
+     or (select max(position) from changedesk.week_plan where plan_id = pid) <> n then
+    raise exception 'the plan''s positions must run 1 to %', n;
+  end if;
+  for req in select * from changedesk.requests where request_id = any (ids) and status = 'Triaged' loop
+    update changedesk.requests set status = 'Planned', updated_at = now() where request_id = req.request_id;
+    insert into changedesk.status_history (request_id, from_status, to_status, changed_at, changed_by, note, stamp)
+    values (req.request_id, 'Triaged', 'Planned', at, who, format('in the plan for the week of %s (%s)', to_char(wk, 'DD/MM/YYYY'), pid), st);
+  end loop;
+  for req in select * from changedesk.requests where status = 'Planned' and not (request_id = any (ids)) loop
+    update changedesk.requests set status = 'Triaged', updated_at = now() where request_id = req.request_id;
+    insert into changedesk.status_history (request_id, from_status, to_status, changed_at, changed_by, note, stamp)
+    values (req.request_id, 'Planned', 'Triaged', at, who, format('not in the plan for the week of %s (%s)', to_char(wk, 'DD/MM/YYYY'), pid), st);
+  end loop;
+  return n;
+end $$;
+
+-- ---------------------------------------------------------------- the forecast (stage 4, R18 to R20)
+
+-- One run from scripts/forecast.py: the run (what it ran on), its rows (one per open item, plus one
+-- per lane with request_id null), and the update drafts the trigger made. A 'forecast' run must give
+-- every open item a row (R18: a date range, a service level or the chance of its date). A 'what-if'
+-- run (another load or setting) may draft nothing. Drafts are drafts: nothing here can send one.
+create or replace function changedesk.log_forecast(run jsonb, rows jsonb, drafts jsonb) returns integer
+language plpgsql security definer set search_path = changedesk, pg_temp as $$
+declare
+  rid text := nullif(trim(coalesce(run ->> 'run_id', '')), '');
+  missing text;
+  n integer;
+begin
+  if jsonb_typeof(run) <> 'object' or jsonb_typeof(rows) <> 'array' or jsonb_typeof(drafts) <> 'array' then
+    raise exception 'log_forecast expects a run object and two arrays';
+  end if;
+  if rid is null or coalesce(run ->> 'stamp', '') not like 'changedesk %' or length(trim(coalesce(run ->> 'made_by', ''))) = 0 then
+    raise exception 'a forecast run needs an id, who made it, and a stamp';
+  end if;
+  insert into changedesk.forecast_runs (run_id, purpose, start_week, rule, runs, horizon_weeks, seed, load, safe_start_days,
+    settings, summary, made_by, made_at, stamp)
+  values (rid, run ->> 'purpose', (run ->> 'start_week')::date, run ->> 'rule', (run ->> 'runs')::integer,
+    (run ->> 'horizon_weeks')::integer, (run ->> 'seed')::integer, (run ->> 'load')::numeric, (run ->> 'safe_start_days')::integer,
+    coalesce(run -> 'settings', '{}'::jsonb), coalesce(run -> 'summary', '{}'::jsonb), trim(run ->> 'made_by'),
+    (run ->> 'made_at')::timestamptz, run ->> 'stamp');
+  insert into changedesk.forecasts (run_id, request_id, lane, kind, p50, p85, p95, service_level_days, chance, latest_safe_start,
+    note, hours_in_per_week, hours_out_per_week, growing, finished_share, made_at)
+  select rid, f.request_id, f.lane, f.kind, f.p50, f.p85, f.p95, f.service_level_days, f.chance, f.latest_safe_start,
+    coalesce(f.note, ''), f.hours_in_per_week, f.hours_out_per_week, f.growing, f.finished_share, (run ->> 'made_at')::timestamptz
+  from jsonb_to_recordset(rows) as f(request_id text, lane text, kind text, p50 date, p85 date, p95 date, service_level_days numeric,
+    chance numeric, latest_safe_start date, note text, hours_in_per_week numeric, hours_out_per_week numeric, growing boolean,
+    finished_share numeric);
+  get diagnostics n = row_count;
+  if run ->> 'purpose' = 'forecast' then
+    select string_agg(r.request_id, ', ' order by r.request_id) into missing
+    from changedesk.requests r
+    where r.status in ('Triaged', 'Planned', 'In progress') and r.lane is not null
+      and not exists (select 1 from changedesk.forecasts f where f.run_id = rid and f.request_id = r.request_id);
+    if missing is not null then
+      raise exception 'forecast % gives no forecast for %', rid, missing;
+    end if;
+  elsif jsonb_array_length(drafts) > 0 then
+    raise exception 'a what-if run drafts no updates';
+  end if;
+  insert into changedesk.updates (update_id, run_id, audience, kind, request_id, subject, body, forecast_run_id, drafted_by,
+    drafted_at, draft_problems, status, stamp)
+  select u.update_id, rid, 'requester', 'status', u.request_id, u.subject, u.body, rid, u.drafted_by, u.drafted_at,
+    coalesce(u.draft_problems, ''), 'draft', u.stamp
+  from jsonb_to_recordset(drafts) as u(update_id text, request_id text, subject text, body text, drafted_by text,
+    drafted_at timestamptz, draft_problems text, stamp text);
+  return n;
 end $$;

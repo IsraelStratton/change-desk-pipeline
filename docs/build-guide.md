@@ -1,4 +1,4 @@
-# Build guide: stages 0 to 2
+# Build guide: stages 0 to 4
 
 Who does what. The Code chat does every step it can from the command line. Israel does only what needs him: keys and passwords. COURSES 2ND does the clicks in Israel's Chrome. Neither chat sees a key or a password.
 
@@ -50,7 +50,9 @@ The Claude credential is reused, not made again: **Claude key gtm-pipeline-v2** 
 .venv/bin/python scripts/n8n_publish.py check
 ```
 
-Five workflows, all off: Change Desk: intake form, run triage, confirm lanes, change a score, decide list. None has a schedule. Before a test session: `n8n_publish.py on`. After it: `n8n_publish.py off`.
+Five workflows, all off: Change Desk: intake form, run triage, confirm lanes, change a score, decide list. None has a schedule. Before a test session: `n8n_publish.py on`. After it: `n8n_publish.py off`, then `n8n_publish.py check`.
+
+Switch them on and off with the script, not the n8n screens: Publish and Unpublish there each save a named version. That is no harm, and `check` now reads the published version too (n8n 2.x runs the published version, not the saved draft): an active workflow's must be its latest saved version and match the file, an inactive one must have none.
 
 ## Part D. A test run (COURSES 2ND, on Israel's delegation)
 
@@ -63,3 +65,34 @@ The reviews in a test run are made by COURSES 2ND or the Code chat on Israel's d
 5. **Decide list** at http://localhost:5678/form/changedesk-decide. Reviewer `courses-2nd (delegated)`. Choose "Do it next" for the oldest standard item, "Close: no longer needed" for one small item, and leave the rest.
 
 What the Code chat checks afterwards: every new request has a status history; every triaged row has every field and a stamp; nothing urgent or fixed-date is confirmed without a stamp with the reviewer's name; the changed score shows both values; the closed item has a draft in `changedesk.updates` with status `draft`; nothing was sent; the cost per triage in `docs/cost-sheet.md`.
+
+## Part E. The tracker's own Notion key (Israel; done 25/11/2026, 09:40)
+
+The board "Change Desk — tracker (made-up tickets)" was built by COURSES 2ND, empty, with its 21 properties and three views. Israel made a Notion connection, "Change Desk tracker", with its reach checked in Notion: read, update and insert content; no comments; no user information; access to this one board only. Three values are in `.env`, put there by Israel and never printed by any script: `NOTION_CHANGEDESK_TOKEN` (the key), `NOTION_CHANGEDESK_DB` (the board) and `NOTION_CHANGEDESK_DATA_SOURCE` (its data source). The two ids are also in `.prepush-private.local`, so the pre-push check refuses them.
+
+```bash
+.venv/bin/python scripts/sync_tracker.py --check     # the board's properties, types and options; writes nothing
+.venv/bin/python scripts/sync_tracker.py --dry-run   # what a sync would change; writes nothing
+.venv/bin/python scripts/sync_tracker.py             # create and update rows by Request ID; never deletes
+```
+
+If a property is missing or wrong, the script says which and writes nothing. The board is COURSES 2ND's: fix it there, not here.
+
+## Part F. Stages 3 and 4 by hand (Code chat; done 25/11/2026)
+
+Nothing is scheduled. After the pipe changes (a triage run, a confirmation, a decision, a setting), run in this order:
+
+```bash
+.venv/bin/python scripts/plan_week.py        # the week's plan, saved; docs/reports/week-plan.md with the working
+.venv/bin/python scripts/forecast.py         # the forecast, saved; drafts an update only when an 85% date moved more than a week
+.venv/bin/python scripts/health_report.py    # docs/reports/health.md
+.venv/bin/python scripts/sync_tracker.py     # the board
+```
+
+A what-if forecast (another demand) is saved as a what-if and drafts nothing: `scripts/forecast.py --load 2`. The proof runs on the sample history file alone, with no database: `scripts/rule_test.py` and `scripts/back_check.py` write their tables into the README and `docs/reports/`, and `--check` says whether they are up to date (a test runs it in CI).
+
+A setting is changed only through the store, with who and why, and the next plan follows it:
+
+```bash
+docker exec -i supabase_db_hubspot-ai-database psql -U postgres -d postgres -c "select changedesk.set_setting('small_share', '0.25'::jsonb, 'Israel', 'the small lane needs more than its demand');"
+```
