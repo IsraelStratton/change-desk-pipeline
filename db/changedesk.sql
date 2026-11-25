@@ -1,4 +1,4 @@
--- Change Desk (INIT-163), stage 0: the store. KB-139 section 6.2.
+-- Change Desk, stage 0: the store. The spec's data section.
 --
 -- Schema changedesk in the local Supabase Postgres. Applied by scripts/setup_db.py as the
 -- database owner. Safe to run again: every object is created only if it is missing, and views
@@ -13,7 +13,7 @@
 -- the functions in db/app_functions.sql. All data is made up.
 
 create schema if not exists changedesk;
-comment on schema changedesk is 'Change Desk (INIT-163): bug and enhancement pipeline on made-up tickets. Written only through checked functions.';
+comment on schema changedesk is 'Change Desk: bug and enhancement pipeline on made-up tickets. Written only through checked functions.';
 
 -- ---------------------------------------------------------------- goals
 
@@ -26,7 +26,7 @@ create table if not exists changedesk.goals (
 );
 comment on table changedesk.goals is 'A few made-up business goals. The goal link is on the item only: nobody is scored.';
 
--- ---------------------------------------------------------------- settings (KB-139 section 7)
+-- ---------------------------------------------------------------- settings (the spec's settings)
 
 create table if not exists changedesk.settings (
   key          text primary key check (key ~ '^[a-z][a-z0-9_]*$'),
@@ -37,7 +37,7 @@ create table if not exists changedesk.settings (
   changed_at   timestamptz not null default now(),
   why          text not null check (length(trim(why)) > 0)
 );
-comment on table changedesk.settings is 'Every setting in one table, with who changed it, when and why (R14). Starting values from KB-139 section 7.';
+comment on table changedesk.settings is 'Every setting in one table, with who changed it, when and why (R14). Starting values from the settings section of the spec.';
 
 create table if not exists changedesk.settings_history (
   id           bigserial primary key,

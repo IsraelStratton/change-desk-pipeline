@@ -28,7 +28,7 @@ Made at these settings (changedesk.settings when the run was made): **36 hours a
 
 ## Small and quick
 
-11 open small items; no date for each (KB-136 section 6.4). Service level: 85% of small items are done within 15 days.
+11 open small items; no date for each (the design note). Service level: 85% of small items are done within 15 days.
 
 ## Standard
 

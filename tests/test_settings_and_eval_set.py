@@ -1,4 +1,4 @@
-"""The settings (KB-139 section 7) and the labelled eval set: starting values as the spec gives them, and labels the
+"""The settings (the spec's settings) and the labelled eval set: starting values as the spec gives them, and labels the
 playbook can grade."""
 import json
 

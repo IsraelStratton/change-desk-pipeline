@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Make the made-up history: twelve weeks of tickets for a systems team, from a fixed seed.
 
-KB-139 stage 0 and R1. Everything here is invented: the company, the roles, the systems and every
-ticket's wording. No ticket, name or wording comes from any employer (ADR-007).
+The spec's stage 0 and R1. Everything here is invented: the company, the roles, the systems and every
+ticket's wording. No ticket, name or wording comes from any employer (the made-up-data rule).
 
 What it makes (sample/history.json, the file scripts/load_history.py loads):
   - an opening backlog: work that was already waiting when the twelve weeks began;
-  - twelve weeks of arrivals (Monday 31/08/2026 to Sunday 22/11/2026), drawn the way the policy
-    test in KB-136 section 6.6 draws them: per week about 3 standard, 6 small, 0.5 fixed-date and
+  - twelve weeks of arrivals (Monday 31/08/2026 to Sunday 22/11/2026), drawn the way the design note's
+    policy test draws them: per week about 3 standard, 6 small, 0.5 fixed-date and
     0.3 urgent items, about 42.7 hours of demand against 40 hours of capacity;
   - the week-by-week work, done the old way, "highest score first", which is the rule the design
     replaces. So the history carries the fault the design fixes: small items starve and some fixed

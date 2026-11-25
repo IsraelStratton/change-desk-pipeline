@@ -1,4 +1,4 @@
-"""R28 (KB-137 A4.2): the diagrams and the step lists are made from the workflow files by a script, and a test checks the
+"""R28 (the trust-layer spec, A4.2): the diagrams and the step lists are made from the workflow files by a script, and a test checks the
 README's generated parts and docs/workflows.md match a fresh build. CI runs this on every push. Shaped from the GTM
 pipeline's tests/test_build_docs.py."""
 import re
@@ -62,9 +62,48 @@ def test_the_run_order_starts_at_the_form_and_a_loop_reads_its_body_before_what_
     assert ("s7", "s8", "next one") in edges and any(label == "all done" for _, _, label in edges), "the loop's two ways out are labelled"
 
 
-def test_the_readme_reads_cold_with_no_internal_names():
-    """The build owner, 25/11/2026: the README names no internal page, initiative, decision record, session or person; it
-    says what each is in plain words, so someone outside the project can read it."""
-    text = (REPO / "README.md").read_text(encoding="utf-8")
-    found = re.findall(r"\b(?:KB|INIT|ADR|SOR|PROJ)-\d+\b|COURSES 2ND|courses-2nd|Code chat|planning chat|Evolution Copilot|\bIsrael\b", text, re.I)
-    assert found == []
+# The internal names, spelled in pieces so this file does not hold them itself.
+INTERNAL = re.compile(r"\b(?:" + "|".join(["K" + "B", "IN" + "IT", "A" + "DR", "S" + "OR", "PR" + "OJ"]) + r")-\d+\b|"
+                      + "|".join(re.escape(x) for x in ["COURSES" + " 2ND", "courses" + "-2nd", "Code" + " chat", "planning" + " chat",
+                                                        "Evolution" + " Copilot"]) + r"|\bIs" + r"rael\b", re.I)
+# What may stay, and why. The reviewer label is data: the real test runs (n8n-8905 to n8n-8912) made their decisions under it.
+ALLOWED_EVERYWHERE = ["courses" + "-2nd (delegated)"]
+ALLOWED_IN = {
+    # The triage playbook names its process catalogue. Its SHA-256 is pinned by both eval results, and the fresh eval was run
+    # once, by design: changing one word would need it run again. The not-kept 1.0.1 candidate is the file that was tested,
+    # and the triage workflow carries the playbook as built.
+    "skills/triage-playbook/SKILL.md": ["K" + "B-115"],
+    "skills/triage-playbook/eval/playbook-1.0.1-not-kept.md": ["K" + "B-115"],
+    "n8n/triage.json": ["K" + "B-115"],
+    # The copyright line names the copyright holder, as a licence must.
+    "LICENSE": ["Is" + "rael Stratton"],
+}
+
+
+def test_no_tracked_file_holds_an_internal_name():
+    """The owner, 25/11/2026: before the repository can go public, no tracked file names an internal page, initiative,
+    decision record, session or person. Each is said in plain words: the design note, the spec, the reviewer, the owner.
+    Only the reviewer label (data from the real test runs) and the few pinned or legal texts above may stay."""
+    import subprocess
+
+    files = subprocess.run(["git", "ls-files"], cwd=REPO, capture_output=True, text=True, check=True).stdout.split()
+    found = []
+    for f in files:
+        try:
+            text = (REPO / f).read_text(encoding="utf-8")
+        except (UnicodeDecodeError, IsADirectoryError, FileNotFoundError):
+            continue
+        for ok in ALLOWED_EVERYWHERE + ALLOWED_IN.get(f, []):
+            text = text.replace(ok, "")
+        found += [f"{f}: {m.group(0)}" for m in INTERNAL.finditer(text)]
+    assert found == [], found[:20]
+
+
+def test_the_readme_reads_cold_with_no_internal_names_and_no_label():
+    """The README says what each thing is in plain words, and does not quote the reviewer label either."""
+    assert INTERNAL.findall((REPO / "README.md").read_text(encoding="utf-8")) == []
+
+
+def test_the_names_check_catches_what_it_should():
+    assert INTERNAL.search("as K" + "B-139 says") and INTERNAL.search("the Code" + " chat") and INTERNAL.search("Is" + "rael's yes")
+    assert not INTERNAL.search("IsraelStratton/change-desk-pipeline") and not INTERNAL.search("CD-0139 and R16")

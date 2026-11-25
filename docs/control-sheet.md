@@ -1,6 +1,6 @@
 # Control sheet
 
-One page for the whole build (KB-137 A1.5 to A1.7; R29), laid out on the six practices of Australia's [Guidance for AI Adoption](https://www.industry.gov.au/publications/guidance-for-ai-adoption/guidance-ai-adoption-foundations) (Department of Industry, October 2025), as the GTM pipeline's sheet is. Every line points to the file, test or log row that shows it; `tests/test_control_sheet.py` fails if one does not. **This sheet records facts about the build and states no legal conclusion. At an employer, whether a duty applies is decided by their privacy lead.**
+One page for the whole build (the trust-layer spec, A1.5 to A1.7; R29), laid out on the six practices of Australia's [Guidance for AI Adoption](https://www.industry.gov.au/publications/guidance-for-ai-adoption/guidance-ai-adoption-foundations) (Department of Industry, October 2025), as the GTM pipeline's sheet is. Every line points to the file, test or log row that shows it; `tests/test_control_sheet.py` fails if one does not. **This sheet records facts about the build and states no legal conclusion. At an employer, whether a duty applies is decided by their privacy lead.**
 
 ## The AI register (A1.7)
 

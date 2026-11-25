@@ -1,6 +1,6 @@
 # Role card: the update drafter
 
-KB-137 A1.4. One card per agent. Stage 5's agent, shaped from the message drafter (its guard rules, its data block, its code check of every draft before a person sees it). It reads like a job description: it has an owner, a written brief, limits, and a person who checks its work.
+The trust-layer spec, A1.4. One card per agent. Stage 5's agent, shaped from the message drafter (its guard rules, its data block, its code check of every draft before a person sees it). It reads like a job description: it has an owner, a written brief, limits, and a person who checks its work.
 
 | Item | This agent |
 |---|---|
@@ -17,5 +17,5 @@ KB-137 A1.4. One card per agent. Stage 5's agent, shaped from the message drafte
 | **Stop switch** | Nothing is scheduled. It runs only when the forecast is run by hand and the trigger fires, or when `scripts/draft_updates.py` is started. Unpublish the approval form in n8n and nothing can be approved. Revoking the key in the Claude Console workspace `gtm-pipeline` stops every AI call at once |
 | **Spend limit** | The workspace `gtm-pipeline` has a US$10 monthly limit. One update costs about US$0.0008 (one drafting run of seven readers, about US$0.005): [`docs/cost-sheet.md`](../cost-sheet.md) |
 | **Evidence** | `changedesk.run_log` (step `updater`, one row per call, with the update it drafted), `changedesk.update_triggers` (why it ran), `changedesk.updates` (the draft, its facts, its figures, its problems, its stamp), `changedesk.agent_handoffs` (from the drafter to the person), `changedesk.decisions` and `changedesk.outbox` (the person's decision). `scripts/check_updates.py` reads every figure's row again: [`docs/reports/updates.md`](../reports/updates.md) |
-| **How it got to 1.0.2** | Four live runs on one forecast (25/11/2026), every draft kept: 1.0.0 gave 2 clean drafts of 6 (counts written in words; the manager's answer cut off); 1.0.1 gave 6 of 7 twice (the manager's draft over its word limit, then a date that is not a fact); 1.0.2 gave 6 of 7, the seventh flagged by the model itself (a false flag on a requester's "URGENT!!!" title). Runs 1 to 3 were rejected as superseded, on Israel's delegation. There is no labelled eval for it yet: its code checks are its test |
-| **Review date** | After COURSES 2ND's test run of the approval form, or sooner if a person rejects an update for a figure or a wording the checks passed |
+| **How it got to 1.0.2** | Four live runs on one forecast (25/11/2026), every draft kept: 1.0.0 gave 2 clean drafts of 6 (counts written in words; the manager's answer cut off); 1.0.1 gave 6 of 7 twice (the manager's draft over its word limit, then a date that is not a fact); 1.0.2 gave 6 of 7, the seventh flagged by the model itself (a false flag on a requester's "URGENT!!!" title). Runs 1 to 3 were rejected as superseded, on the owner's delegation. There is no labelled eval for it yet: its code checks are its test |
+| **Review date** | After the reviewer's test run of the approval form, or sooner if a person rejects an update for a figure or a wording the checks passed |

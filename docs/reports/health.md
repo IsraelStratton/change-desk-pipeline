@@ -39,7 +39,7 @@ Over all 12 complete weeks: Urgent 5 in, 4 out; Fixed date 8 in, 4 out; Small an
 | CD-0086 Cannot save one Quote record after the last update | Small and quick | past the age limit | 49 | 30 | 19 |
 | CD-0020 Refresh the test sandbox | Standard | past the age limit | 105 | 90 | 15 |
 
-Each is decided on the n8n decide form: do it next, merge it, or close it with a reason. A fixed-date item whose date has passed is listed at once, whatever its age (a build addition to R16, Israel's decision of 25/11/2026): a person says whether it is still needed.
+Each is decided on the n8n decide form: do it next, merge it, or close it with a reason. A fixed-date item whose date has passed is listed at once, whatever its age (a build addition to R16, the owner's decision of 25/11/2026): a person says whether it is still needed.
 
 ## Fixed dates still open
 

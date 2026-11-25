@@ -157,7 +157,7 @@ def test_score_and_decide_workflows_build_their_forms():
 
 
 def test_the_playbook_built_into_every_workflow_equals_skill_md():
-    """COURSES 2ND, 25/11/2026: every Code node that carries the playbook carries exactly skills/triage-playbook/SKILL.md,
+    """The reviewer, 25/11/2026: every Code node that carries the playbook carries exactly skills/triage-playbook/SKILL.md,
     and the confirmation stamp names the same version. A playbook edit without a rebuild fails here."""
     import re
 

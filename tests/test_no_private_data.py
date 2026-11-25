@@ -1,6 +1,6 @@
 """Guard: no real contact data or Google OAuth client secrets in any tracked file.
 
-The repository will be public on Israel's later yes. Addresses and keys live only in
+The repository will be public on the owner's later yes. Addresses and keys live only in
 .env and the n8n credential store, never in the repository or the workflow files.
 Copied from the GTM pipeline (tests/test_no_private_data.py), unchanged in what it checks.
 """

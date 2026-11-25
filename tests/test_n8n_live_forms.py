@@ -1,6 +1,6 @@
-"""The two forms COURSES 2ND uses in the stage 5 test run, built from the store's live rows (not fixtures): the approval
+"""The two forms the reviewer uses in the stage 5 test run, built from the store's live rows (not fixtures): the approval
 form from the drafts as its Read Drafts node reads them, and the decide form from the decide list. Run as the app's own
-login; skipped when there is no local store (CI). COURSES 2ND cannot run scripts, so a data-shape fault here would only
+login; skipped when there is no local store (CI). The reviewer cannot run scripts, so a data-shape fault here would only
 show in the test run."""
 import json
 import sys

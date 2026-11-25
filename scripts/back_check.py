@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The back-check (KB-139 stage 4, R21): forecast from week 8 of the sample history, and compare with what happened in
+"""The back-check (the spec's stage 4, R21): forecast from week 8 of the sample history, and compare with what happened in
 weeks 9 to 12. The share of items that finished inside their 85% range is reported, whatever it is.
 
 The forecast is the same code as scripts/forecast.py: the planner's simulate() and plan_week(), and forecast.py's

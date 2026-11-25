@@ -19,7 +19,7 @@ def test_identity_needs_noreply_for_author_and_committer():
 
 
 def test_message_rejects_agent_lines_but_allows_plain_mentions():
-    assert pc.check_message("a", "Chapter 3: Claude key proved\n\nThe Code chat checked it.") == []
+    assert pc.check_message("a", "Chapter 3: Claude key proved\n\nThe coding session checked it.") == []
     assert pc.check_message("a", "Fix\n\nCo-Authored-By: Someone <x" + AT + "anthropic.com>")
     assert pc.check_message("a", "Fix\n\nGenerated with [Claude Code](https://claude.com/claude-code)")
 

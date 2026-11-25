@@ -1,4 +1,4 @@
-"""R30 (KB-137 A5): the cost sheet is made by script from the run log, through a JSON CI can check; no figure on it is
+"""R30 (the trust-layer spec, A5): the cost sheet is made by script from the run log, through a JSON CI can check; no figure on it is
 typed by hand; it gives the cost of one triage and of one update. Shaped from the GTM pipeline's test."""
 import json
 import re

@@ -1,4 +1,4 @@
-"""The Change Desk's planner: a plain script, not a model (KB-139 stage 3, R12 to R14), and the forecast and rule test
+"""The Change Desk's planner: a plain script, not a model (the spec's stage 3, R12 to R14), and the forecast and rule test
 that run on it (stage 4, R18 to R21, R26).
 
 R13, one piece of code: plan_week() below makes every week's plan there is. The week's plan (scripts/plan_week.py) is
@@ -20,7 +20,7 @@ The lanes rule (R12), one week of hours (setting hours_per_week):
      ahead of its latest safe start.
 Everything comes from the settings the caller passes in: change a setting and the next plan changes (R14).
 
-The two older rules, for the rule test (KB-136 section 6.6): "highest score first" (urgent counts as 10) is how the
+The two older rules, for the rule test (the design note's policy test): "highest score first" (urgent counts as 10) is how the
 made-up history was worked (scripts/make_history.py), and the rule test checks it reproduces that history hour for
 hour; "value per hour first" puts urgent work first, then the value part per hour of size.
 
@@ -120,7 +120,7 @@ def nearest_rank(values: list, p: float):
 
 
 def safe_start_days(spans_days: list[int], p: float, fallback: int = 7) -> int:
-    """Latest safe start (KB-139 section 7): the due date less the time such work has needed p of the time. The time a
+    """Latest safe start (the spec's settings): the due date less the time such work has needed p of the time. The time a
     fixed-date item needed is its span in the work log, from the Monday of its first week of work to the Sunday of its
     last. With no fixed-date item done yet, one week (the plan's own step) is used."""
     return int(nearest_rank(spans_days, p)) if spans_days else fallback
@@ -375,7 +375,7 @@ MEASURES = ("small done %", "oldest small waiting (weeks)", "fixed dates met %",
 
 
 def replay_measures(rp: Replay, week_one: date, weeks: int) -> dict[str, float]:
-    """The policy test's measures (KB-136 section 6.6), on one replay. Settled items (for "done %") arrived before the
+    """The policy test's measures (the design note's policy test), on one replay. Settled items (for "done %") arrived before the
     last four weeks, as there. Items a person closed or merged count neither way."""
     end = week_one + timedelta(weeks=weeks)
     settled_by = datetime.combine(week_one + timedelta(weeks=weeks - 4), time(0), TEAM_TZ)

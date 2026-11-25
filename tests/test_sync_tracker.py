@@ -1,5 +1,5 @@
 """scripts/sync_tracker.py, the Notion tracker board (stage 3), with no key and no network: Notion is replaced by a fake
-that records every call. The board's property names and options are COURSES 2ND's, read from the board on 25/11/2026.
+that records every call. The board's property names and options are the reviewer's, read from the board on 25/11/2026.
 The script checks them before it writes, maps the store's values to them, upserts by Request ID, never deletes, writes
 roles never names, and never prints a secret."""
 import copy
@@ -22,7 +22,7 @@ def board():
         if name in T.OPTIONS:
             p[kind] = {"options": [{"id": o[:3], "name": o, "color": "default"} for o in sorted(T.OPTIONS[name])]}
         props[name] = p
-    props["Notes (COURSES 2ND)"] = {"id": "x", "name": "Notes (COURSES 2ND)", "type": "rich_text", "rich_text": {}}
+    props["Notes (the reviewer)"] = {"id": "x", "name": "Notes (the reviewer)", "type": "rich_text", "rich_text": {}}
     return {"object": "data_source", "id": DS, "properties": props}
 
 
@@ -95,7 +95,7 @@ def test_a_missing_or_wrong_property_stops_the_sync_before_any_write(change, pro
     assert any(p.startswith(problem) for p in T.board_problems(b))
     fake = FakeNotion(ds=b)
     code, lines = T.sync(fake, DB, DS, [row()], "sync")
-    assert code == 1 and "nothing was written" in lines[0] and "COURSES 2ND owns the board" in lines[0]
+    assert code == 1 and "nothing was written" in lines[0] and "the reviewer owns the board" in lines[0]
     assert writes(fake) == [] and ("pages", DS) not in fake.calls
 
 

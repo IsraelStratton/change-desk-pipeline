@@ -1,11 +1,11 @@
 # Role card: the triage agent
 
-KB-137 A1.4, copied in form from the GTM pipeline's role cards. One card per agent. It reads like a job description, because the agent is treated like a member of staff: it has an owner, a written playbook, limits, and a person who checks its work.
+The trust-layer spec, A1.4, copied in form from the GTM pipeline's role cards. One card per agent. It reads like a job description, because the agent is treated like a member of staff: it has an owner, a written playbook, limits, and a person who checks its work.
 
 | Item | This agent |
 |---|---|
 | **Name** | Triage agent (the "Claude Triage Step" in the n8n workflow "Change Desk: run triage", and `scripts/triage.py` for runs outside n8n) |
-| **Purpose** | Read one bug or enhancement request and propose its fixed shape (KB-139 section 6.4): type, size in hours, lane, the fixed-date test (date and what breaks), the urgent test (what harm is growing), a business goal, the playbook that would handle it, a split for a large item, four score parts with reasons, a reason and a confidence |
+| **Purpose** | Read one bug or enhancement request and propose its fixed shape (the spec's triage shape): type, size in hours, lane, the fixed-date test (date and what breaks), the urgent test (what harm is growing), a business goal, the playbook that would handle it, a split for a large item, four score parts with reasons, a reason and a confidence |
 | **Named owner** | Systems desk lead: a made-up role in this build. At an employer, the person who runs the systems team's intake |
 | **What it reads** | One request: the requester's role (never a name), the title, the text, and what the requester said about a date or harm; today's date; the list of business goals. It sees no request id, no other request, no score of anyone, and no history |
 | **What it writes** | Nothing. It returns one JSON object in the fixed shape. The workflow, not the agent, checks it and logs it through `changedesk.log_triage`, with a who-decided stamp |

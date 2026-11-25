@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The R23 check: find the source row of every figure in an update (KB-139 stage 5). A plain script, started by hand.
+"""The R23 check: find the source row of every figure in an update (the spec's stage 5). A plain script, started by hand.
 
 For each update, every figure in its subject and body (request ids, dates, percentages, money, numbers, and figures
 written in words) is found by the same code the drafter's own check uses (engine/figures.js), traced to a fact of the

@@ -1,6 +1,6 @@
 # Role card: the message drafter
 
-KB-137 A1.4. The drafter is shaped from the GTM pipeline's message drafter (its guard rules and its code check of every draft). It drafts one kind of message: the note to a requester when a person closes their old request from the decide list (R16). Stage 5's updates for three audiences have their own agent and card: [the update drafter](update-drafter.md).
+The trust-layer spec, A1.4. The drafter is shaped from the GTM pipeline's message drafter (its guard rules and its code check of every draft). It drafts one kind of message: the note to a requester when a person closes their old request from the decide list (R16). Stage 5's updates for three audiences have their own agent and card: [the update drafter](update-drafter.md).
 
 | Item | This agent |
 |---|---|
@@ -17,4 +17,4 @@ KB-137 A1.4. The drafter is shaped from the GTM pipeline's message drafter (its 
 | **Stop switch** | Nothing is scheduled. The drafter runs only when a person closes an item on the decide form. `python scripts/n8n_publish.py off` stops every workflow |
 | **Spend limit** | The workspace `gtm-pipeline` has a US$10 monthly limit. Cost per draft: see [`docs/cost-sheet.md`](../cost-sheet.md) |
 | **Evidence** | `changedesk.run_log` (step `drafter`), `changedesk.updates` (the draft, its problems, its stamp), `changedesk.agent_handoffs` (from the person's decision to the drafter) |
-| **Review date** | After COURSES 2ND's test run, which closes CD-0046, CD-0060 and CD-0089 on the decide form and approves their three close messages |
+| **Review date** | After the reviewer's test run, which closes CD-0046, CD-0060 and CD-0089 on the decide form and approves their three close messages |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make the docs that describe the workflows from the workflow files themselves (R28; KB-137 A4.2).
+"""Make the docs that describe the workflows from the workflow files themselves (R28; the trust-layer spec, A4.2).
 
 Shaped from the GTM pipeline (scripts/build_docs.py), cut to what this build needs:
   docs/workflows.md   every n8n workflow (n8n/*.json, the files scripts/build_n8n.py writes): a diagram and a

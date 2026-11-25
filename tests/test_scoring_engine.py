@@ -10,7 +10,7 @@ WEIGHTS = SETTINGS["score_weights"]
 
 def test_r9_the_score_is_the_weighted_parts_with_the_working_shown(scoring_eng):
     out = scoring_eng.call("scoreWithWorking", {"value": 8, "effort": 7, "risk": 9, "goal_fit": 8, "readiness": 6}, WEIGHTS)
-    # The Decision Engine's own example (KB-136, INIT-163's score): 2.40 + 1.40 + 1.80 + 1.60 + 0.60 = 7.80.
+    # The Decision Engine's own example (the design note's score for this build): 2.40 + 1.40 + 1.80 + 1.60 + 0.60 = 7.80.
     assert out["score"] == 7.8
     assert out["working"] == "value 8 x 0.3 = 2.40 + effort 7 x 0.2 = 1.40 + risk 9 x 0.2 = 1.80 + goal_fit 8 x 0.2 = 1.60 + readiness 6 x 0.1 = 0.60"
     with pytest.raises(Exception, match="whole number"):
@@ -78,7 +78,7 @@ def test_r16_the_decide_form_offers_do_next_merge_and_close(scoring_eng):
 
 
 def test_r16_build_addition_the_form_says_a_fixed_date_has_passed(scoring_eng):
-    """A fixed-date item past its date is on the list whatever its age (Israel, 25/11/2026); the form says why it is there."""
+    """A fixed-date item past its date is on the list whatever its age (the owner, 25/11/2026); the form says why it is there."""
     missed = {"request_id": "CD-0060", "title": "Seat count for the renewal on 27/10/2026", "lane": "fixed_date", "status": "Planned",
               "requester_role": "Billing specialist", "playbook": "crm-licence-seat-management", "age_days": 64, "age_limit_days": None,
               "days_over": 29, "score": 6.1, "due_date": "2026-10-27", "why": "its fixed date has passed"}
@@ -106,8 +106,9 @@ def test_r16_choices_become_stamped_rows_and_a_close_has_a_reason(scoring_eng):
     assert left == []
 
 
-# The reviewer's note from test run n8n-8909, word for word: it covers the whole form, names a person and two other items.
-SHARED_NOTE = ("Test run on Israel's delegation. CD-0016 is the oldest standard item. CD-0029 is closed as no longer needed. "
+# The reviewer's note from test run n8n-8909, word for word but for the owner's name, now "the owner": it covers the whole
+# form, names a person and two other items.
+SHARED_NOTE = ("Test run on the owner's delegation. CD-0016 is the oldest standard item. CD-0029 is closed as no longer needed. "
                "CD-0037 is merged into CD-0145, which asks for the same thing.")
 
 
@@ -122,7 +123,7 @@ def test_a_shared_note_never_becomes_an_items_reason_or_reaches_the_drafter(scor
     record = drafter_eng.call("closeRecord", dict(CLOSED, reason=by["CD-0029"]["reason"]))
     assert record["reason_for_closing"] == "No longer needed."
     content = drafter_eng.call("buildCloseDraftRequest", dict(CLOSED, reason=by["CD-0029"]["reason"]), "claude-haiku-5-5")["messages"][0]["content"]
-    for leaked in ("Israel", "CD-0016", "CD-0037", "CD-0145", "delegation"):
+    for leaked in ("the owner", "CD-0016", "CD-0037", "CD-0145", "delegation"):
         assert leaked not in content
 
 

@@ -1,4 +1,4 @@
-"""One test or more for each "Done when" of R1 to R11 and R16 (KB-139 section 5), against the local store.
+"""One test or more for each "Done when" of R1 to R11 and R16 (the spec's requirements), against the local store.
 
 Each test runs as the app's own login (changedesk_app) inside a transaction that is rolled back, or, for the
 store's guards the app cannot reach at all, as the owner inside begin ... rollback. The AI step is replaced
@@ -391,7 +391,7 @@ MISSED = ["CD-0046", "CD-0060", "CD-0089"]  # the three fixed dates the old rule
 
 
 def test_r16_build_addition_a_fixed_date_past_its_date_is_on_the_list_at_once_whatever_its_age(db):
-    """Israel's decision, 25/11/2026: a fixed-date item whose date has passed goes on the decide list at once, whatever
+    """The owner's decision, 25/11/2026: a fixed-date item whose date has passed goes on the decide list at once, whatever
     its age, and first. CD-0149 (asked 22/11, due 04/12) shows it: not on the list on its date, on it the day after,
     though it is 13 days old and no lane's age limit is that short."""
     rows = desk_db.rows(db, "select * from changedesk.decide_list_at('2026-11-25')")
@@ -412,7 +412,7 @@ def test_r16_build_addition_a_fixed_date_past_its_date_is_on_the_list_at_once_wh
 
 
 def test_r16_build_addition_a_missed_date_can_be_closed_as_overtaken_and_the_close_is_drafted(db, scoring_eng):
-    """What COURSES 2ND does in the test run, here inside a rolled-back transaction: close the missed dates on the decide
+    """What the reviewer does in the test run, here inside a rolled-back transaction: close the missed dates on the decide
     form as overtaken. Each close is the item's own reason, and each goes to the message drafter."""
     listed = desk_db.rows(db, "select request_id, title, lane, status, requester_role, playbook, arrived_on::text as arrived_on, age_days, "
                               "age_limit_days, days_over, score, due_date::text as due_date, why from changedesk.decide_list_at(%s)", (NOW[:10],))

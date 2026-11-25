@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The rule test (KB-139 stage 4, R26): three order rules on the sample history, then on the histories of seeds 163
+"""The rule test (the spec's stage 4, R26): three order rules on the sample history, then on the histories of seeds 163
 to 172, with the spread. The proof for the design, as the eval is for the triage step. A plain script, no database.
 
-KB-136 section 6.6 kept the policy test that found the fault: 300 runs of made-up tickets. Here the same three rules
+The design note keeps the policy test that found the fault: 300 runs of made-up tickets. Here the same three rules
 work the sample history's own arrivals again, week by week, through the planner's plan_week() (R13: the code that makes
 the real week's plan):
   - highest score first (urgent counted as 10): how the history was worked. The replay must give back the history's

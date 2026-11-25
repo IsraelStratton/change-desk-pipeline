@@ -63,7 +63,7 @@ begin
 end $$;
 create index if not exists run_log_request_idx on changedesk.run_log (request_id);
 
--- KB-137 B3: each hand-off is a record. Here the AI step hands an item to a person when the lane
+-- the trust-layer spec, B3: each hand-off is a record. Here the AI step hands an item to a person when the lane
 -- needs a confirmation, and a person's close hands the item to the message drafter.
 create table if not exists changedesk.agent_handoffs (
   handoff_id   text primary key,

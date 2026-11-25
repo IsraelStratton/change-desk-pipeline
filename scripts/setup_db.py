@@ -5,7 +5,7 @@ Copied from the GTM pipeline (scripts/setup_run_log.py) and shaped for this buil
   1. Applies db/changedesk.sql, db/run_log.sql, db/views.sql and db/app_functions.sql as the
      database owner (inside the Supabase db container). Safe to run again.
   2. Creates the login changedesk_app. Its password is made here, written straight to .env as
-     CHANGEDESK_DB_PASSWORD and never printed. Israel pastes it into the n8n Postgres credential.
+     CHANGEDESK_DB_PASSWORD and never printed. The owner pastes it into the n8n Postgres credential.
   3. Grants that login read access to the changedesk schema and the checked write functions,
      nothing else: no insert, update or delete on any table, and no other schema.
   4. Loads pricing/claude_prices.json, sample/goals.json and, the first time only,
@@ -69,7 +69,7 @@ def ensure_password() -> str:
         text = "\n".join(lines) + "\n"
     else:
         text += ("" if text.endswith("\n") or not text else "\n")
-        text += ("\n# The changedesk_app login (made by scripts/setup_db.py). Israel pastes it into the n8n "
+        text += ("\n# The changedesk_app login (made by scripts/setup_db.py). The owner pastes it into the n8n "
                  f"Postgres credential \"Change Desk (Postgres)\".\n{PASSWORD_KEY}={password}\n")
     ENV.write_text(text, encoding="utf-8")
     ENV.chmod(0o600)

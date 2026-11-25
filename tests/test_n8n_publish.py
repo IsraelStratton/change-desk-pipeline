@@ -51,7 +51,7 @@ def test_on_with_no_published_version_is_reported():
 
 
 def test_every_workflow_switched_on_and_off_in_the_n8n_screens_and_left_off_is_in_step():
-    """COURSES 2ND cannot run scripts: it uses Publish and Unpublish in the n8n screens, which save a named version each
+    """The reviewer cannot run scripts: it uses Publish and Unpublish in the n8n screens, which save a named version each
     time, and leaves the workflows off. For every one of the six, as n8n reports it after each step: in step throughout."""
     import pytest
 

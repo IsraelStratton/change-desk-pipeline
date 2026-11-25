@@ -111,7 +111,7 @@ def test_r14_changing_a_setting_in_the_table_changes_the_next_plan(db):
     def small_hours():
         st = desk_state.load(db)
         return sum(s.hours for s in P.plan_week(st.items, WEEK, st.plan_settings()).segments if s.step == "small")
-    # The share as the store holds it: 0.20 at the start, 0.225 since Israel's decision of 25/11/2026 (9 hours of 40).
+    # The share as the store holds it: 0.20 at the start, 0.225 since the owner's decision of 25/11/2026 (9 hours of 40).
     share = float(db.execute("select changedesk.setting_num('small_share') as s").fetchone()["s"])
     week = float(db.execute("select changedesk.setting_num('hours_per_week') as h").fetchone()["h"])
     before = small_hours()

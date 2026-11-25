@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The forecast by lane, and the update trigger (KB-139 stage 4, R18 to R20). A plain script, started by hand.
+"""The forecast by lane, and the update trigger (the spec's stage 4, R18 to R20). A plain script, started by hand.
 
 One forecast for each lane, from that lane's own history (R18). Every open item gets one of three:
   - standard (and urgent) work: the dates it is done by in 50, 85 and 95% of runs (setting forecast_levels);
@@ -171,7 +171,7 @@ def run_forecast(conn, start_week: date, load: float = 1.0, runs: int | None = N
 
 
 def settings_line(s: dict) -> str:
-    """Which settings a report was made at (COURSES 2ND, 25/11/2026: the store moved from 40 to 36 hours a week that day)."""
+    """Which settings a report was made at (the reviewer, 25/11/2026: the store moved from 40 to 36 hours a week that day)."""
     pct = lambda k: f"{float(s[k]) * 100:g}%"  # noqa: E731
     return (f"Made at these settings (changedesk.settings when the run was made): **{float(s['hours_per_week']):g} hours a week**; urgent buffer "
             f"{pct('urgent_buffer_share')}, small and quick {pct('small_share')}, standard {pct('standard_share')}.")
@@ -208,7 +208,7 @@ def report(st, ps, sim: P.SimResult, rows: list[dict], lanes: list[dict], run_id
                 lines.append(f"| {r['request_id']} {it.title if it else ''} | {d(it.due) if it else ''} | {chance} | "
                              f"{d(r['latest_safe_start'])} | {d(r['p85'])} |")
         else:
-            lines += [f"{len(mine)} open small items; no date for each (KB-136 section 6.4). {mine[0]['note']}"]
+            lines += [f"{len(mine)} open small items; no date for each (the design note). {mine[0]['note']}"]
     lines += ["", "## The update trigger (R20)", ""]
     if purpose == "what-if":
         lines.append("A what-if run triggers no update.")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make the week's plan by hand: a plain script, not a model (KB-139 stage 3, R12 to R14).
+"""Make the week's plan by hand: a plain script, not a model (the spec's stage 3, R12 to R14).
 
 Reads the open work and the settings from the store as the app's own login, makes the plan with scripts/planner.py
 (the same plan_week() the forecast and the rule test call), checks that the standard lane's order is the store's own

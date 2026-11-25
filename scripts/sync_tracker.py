@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Fill the Notion tracker board from the store, by hand (KB-139 stage 3): one row for each request, upserted by
+"""Fill the Notion tracker board from the store, by hand (the spec's stage 3): one row for each request, upserted by
 "Request ID". Started by hand; nothing is scheduled.
 
-The board ("Change Desk — tracker (made-up tickets)") is COURSES 2ND's: it was built in Notion with its properties,
+The board ("Change Desk — tracker (made-up tickets)") is the reviewer's: it was built in Notion with its properties,
 options and views. This script never changes it. It first reads the board's properties and checks every one it writes
 is there, with the right type and every option it needs (Notion would otherwise add a missing select option to the
 board). If anything is missing or wrong it says what and writes nothing. It never deletes a row: a row on the board
@@ -43,7 +43,7 @@ NOTION_VERSION = "2026-03-11"
 ENV_KEYS = ("NOTION_CHANGEDESK_TOKEN", "NOTION_CHANGEDESK_DB", "NOTION_CHANGEDESK_DATA_SOURCE")
 MAX_TEXT = 2000
 
-# The board's properties, exactly as COURSES 2ND built them, and the Notion type each must be.
+# The board's properties, exactly as the reviewer built them, and the Notion type each must be.
 PROPERTIES = {
     "Request": "title", "Request ID": "rich_text", "Lane": "select", "Status": "select", "Type": "select",
     "Size (hours)": "number", "Score": "number", "Age (days)": "number", "Past age limit": "checkbox", "Due date": "date",
@@ -291,7 +291,7 @@ def sync(client: Notion, db: str, ds: str, rows: list[dict], mode: str = "sync")
         return 1, ["FAIL the data source in .env is not the tracker database's own: nothing written"]
     problems = board_problems(client.data_source(ds))
     if problems:
-        return 1, ["FAIL the board is not as this script expects, so nothing was written (COURSES 2ND owns the board):"] + [f"  - {p}" for p in problems]
+        return 1, ["FAIL the board is not as this script expects, so nothing was written (the reviewer owns the board):"] + [f"  - {p}" for p in problems]
     lines.append(f"The board has all {len(PROPERTIES)} properties this script writes, with the right types and options.")
     if mode == "check":
         return 0, lines
@@ -301,7 +301,7 @@ def sync(client: Notion, db: str, ds: str, rows: list[dict], mode: str = "sync")
                  f"already the same {plan['same']}.")
     if plan["duplicates"]:
         lines.append(f"  {len(plan['duplicates'])} Request IDs have more than one row on the board ({', '.join(plan['duplicates'])}): "
-                     "the oldest row is updated, the others are left for COURSES 2ND.")
+                     "the oldest row is updated, the others are left for the reviewer.")
     if plan["not_in_store"] or plan["no_request_id"]:
         lines.append(f"  Left alone: {len(plan['not_in_store'])} rows whose Request ID is not in the store, {plan['no_request_id']} with no Request ID.")
     if mode == "dry-run":
@@ -337,7 +337,7 @@ def main(argv: list[str] | None = None, env: dict | None = None) -> int:
     token, db, ds = ((env.get(k) or "").strip() for k in ENV_KEYS)
     missing = [k for k, v in zip(ENV_KEYS, (token, db, ds)) if not v]
     if missing:
-        print(f"CANNOT RUN {', '.join(missing)} not in .env (Israel pastes the key; docs/build-guide.md, part E)")
+        print(f"CANNOT RUN {', '.join(missing)} not in .env (the owner pastes the key; docs/build-guide.md, part E)")
         return 2
     mode = "check" if args.check else "dry-run" if args.dry_run else "sync"
     try:

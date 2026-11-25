@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the one-page pipe health report (KB-139 stage 3, R15 to R17): docs/reports/health.md.
+"""Write the one-page pipe health report (the spec's stage 3, R15 to R17): docs/reports/health.md.
 
 For each lane, each week (the view changedesk.lane_health): in, out, open, the oldest age, items past the age limit,
 fixed dates met, and urgent hours beyond the buffer (R15). The decide list (R16). And the lane growth flag (R17): a
@@ -111,7 +111,7 @@ def report(rows: list[dict], decide: list[dict], fixed: list[dict], plan: list[d
                 else f"due {date.fromisoformat(str(d['due_date'])):%d/%m/%Y}"
             lines.append(f"| {d['request_id']} {d['title']} | {P.LANE_WORDS[d['lane']]} | {d['why']} | {d['age_days']} | {limit} | {d['days_over']} |")
         lines += ["", "Each is decided on the n8n decide form: do it next, merge it, or close it with a reason. A fixed-date item whose date "
-                  "has passed is listed at once, whatever its age (a build addition to R16, Israel's decision of 25/11/2026): "
+                  "has passed is listed at once, whatever its age (a build addition to R16, the owner's decision of 25/11/2026): "
                   "a person says whether it is still needed.", ""]
     lines += ["## Fixed dates still open", ""]
     if fixed:

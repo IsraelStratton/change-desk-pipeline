@@ -31,7 +31,7 @@ Made at these settings (changedesk.settings when the run was made): **36 hours a
 
 ## Small and quick
 
-11 open small items; no date for each (KB-136 section 6.4). No service level: too many small items are not done within the horizon. The small and quick lane takes in more than it puts out in this run (16.3 hours a week arrive in the run and 8 are worked): no finish date is given for the tail.
+11 open small items; no date for each (the design note). No service level: too many small items are not done within the horizon. The small and quick lane takes in more than it puts out in this run (16.3 hours a week arrive in the run and 8 are worked): no finish date is given for the tail.
 
 ## Standard
 

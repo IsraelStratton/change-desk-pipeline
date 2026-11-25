@@ -1,10 +1,10 @@
 # Build guide: stages 0 to 6
 
-Who does what. The Code chat does every step it can from the command line. Israel does only what needs him: keys and passwords. COURSES 2ND does the clicks in Israel's Chrome. Neither chat sees a key or a password.
+Who does what. The coding session does every step it can from the command line. The owner does only what needs the owner: keys and passwords. The reviewer does the clicks in the owner's Chrome. Neither session sees a key or a password.
 
-If any screen shows a price, a trial, a card or a licence: stop and tell Israel.
+If any screen shows a price, a trial, a card or a licence: stop and tell the owner.
 
-## Step 1. Two keys into this folder's .env (Israel, in Terminal; done 25/11/2026)
+## Step 1. Two keys into this folder's .env (the owner, in Terminal; done 25/11/2026)
 
 This one command copies two lines from the GTM pipeline's `.env` into this folder's `.env`: `ANTHROPIC_API_KEY` (the Claude key: Claude Console workspace `gtm-pipeline`, US$10 monthly limit) and `N8N_API_KEY` (the local n8n's API key, used only by `scripts/n8n_publish.py`). It prints only their lengths, never the values.
 
@@ -14,7 +14,7 @@ cd ~/change-desk-pipeline && for k in ANTHROPIC_API_KEY N8N_API_KEY; do { grep -
 
 Expected: `ANTHROPIC_API_KEY length 106` and `N8N_API_KEY length 289`.
 
-## Step 2. The store (Code chat; done 25/11/2026)
+## Step 2. The store (coding session; done 25/11/2026)
 
 ```bash
 .venv/bin/python scripts/setup_db.py
@@ -23,7 +23,7 @@ Expected: `ANTHROPIC_API_KEY length 106` and `N8N_API_KEY length 289`.
 
 `setup_db.py` applies the four SQL files, makes the `changedesk_app` login with its password written straight into `.env` as `CHANGEDESK_DB_PASSWORD` (never printed), loads prices, goals and the settings, and proves the login's limits (12 checks). `load_history.py` loads the made-up history. `load_history.py --reset` puts the store back to the history for a demo.
 
-## Part B. One new n8n credential (COURSES 2ND clicks; Israel pastes the password; done 25/11/2026)
+## Part B. One new n8n credential (the reviewer clicks; the owner pastes the password; done 25/11/2026)
 
 n8n at http://localhost:5678, signed in as the owner. Credentials, Create credential. The name must match exactly: the workflows find their credentials by name.
 
@@ -35,7 +35,7 @@ n8n at http://localhost:5678, signed in as the owner. Credentials, Create creden
 | Host | `host.docker.internal` |
 | Database | `postgres` |
 | User | `changedesk_app` |
-| Password | Israel pastes it. This copies it to the clipboard and shows nothing on screen: `grep '^CHANGEDESK_DB_PASSWORD=' ~/change-desk-pipeline/.env \| cut -d= -f2- \| tr -d '\n' \| pbcopy` |
+| Password | The owner pastes it. This copies it to the clipboard and shows nothing on screen: `grep '^CHANGEDESK_DB_PASSWORD=' ~/change-desk-pipeline/.env \| cut -d= -f2- \| tr -d '\n' \| pbcopy` |
 | Port | `54322` |
 | SSL | Disable |
 
@@ -43,7 +43,7 @@ Save. It shows "Connection tested successfully" when the password is right. This
 
 The Claude credential is reused, not made again: **Claude key gtm-pipeline-v2** (Header Auth) already holds the same key, and its reach fits this build.
 
-## Part C. Put the workflows in (Code chat; done 25/11/2026, all six off)
+## Part C. Put the workflows in (coding session; done 25/11/2026, all six off)
 
 ```bash
 .venv/bin/python scripts/n8n_publish.py publish
@@ -54,21 +54,23 @@ Five workflows, all off: Change Desk: intake form, run triage, confirm lanes, ch
 
 Switch them on and off with the script, not the n8n screens: Publish and Unpublish there each save a named version. That is no harm, and `check` now reads the published version too (n8n 2.x runs the published version, not the saved draft): an active workflow's must be its latest saved version and match the file, an inactive one must have none.
 
-## Part D. A test run (COURSES 2ND, on Israel's delegation)
+## Part D. A test run (the reviewer, on the owner's delegation)
 
-The reviews in a test run are made by COURSES 2ND or the Code chat on Israel's delegation. They prove the flow works; they are not an independent review. Use Chrome (the built-in browser pane blocks n8n's form submit, found in the pipeline).
+**The reviewer label `courses-2nd (delegated)`.** The real test runs (n8n-8905 to n8n-8912) were made under this label, and the store keeps it as data on every decision they made: its first part names the planning session that did the clicks, and `(delegated)` says that session acted on the owner's delegation, not as an independent reviewer. The Notion board never shows the label: it shows the role "Desk reviewer (delegated test run)". A new test run may use any label; the steps below give the one used.
+
+The reviews in a test run are made by the reviewer or the coding session on the owner's delegation. They prove the flow works; they are not an independent review. Use Chrome (the built-in browser pane blocks n8n's form submit, found in the pipeline).
 
 1. **Intake** at http://localhost:5678/form/changedesk-intake. Role `Support lead`; title `A queue for billing questions`; description `Billing questions land in the general queue and wait. We need a billing queue and an escalation after two working days.`; no date; no harm. The last page names the new request id (CD-10xx).
 2. **Triage** at http://localhost:5678/form/changedesk-triage. Choose "Every request in the inbox", Run triage. The last page says how many went into each lane, how many wait for a person, and the cost.
-3. **Confirm lanes** at http://localhost:5678/form/changedesk-confirm-lanes. Reviewer label `courses-2nd (delegated)`. For each row: confirm the lane unless the table shows the AI's lane differs from the rule or the request tried to instruct the AI, in which case confirm the rule's lane (the note says why). Accept a split whose pieces each make sense on their own; reject one that does not. Note: `Test run on Israel's delegation.`
-4. **Change a score** at http://localhost:5678/form/changedesk-change-score. Reviewer `courses-2nd (delegated)`; any item; part `readiness`; a new value; reason `Test run on Israel's delegation: the owner confirmed it can start.`
+3. **Confirm lanes** at http://localhost:5678/form/changedesk-confirm-lanes. Reviewer label `courses-2nd (delegated)`. For each row: confirm the lane unless the table shows the AI's lane differs from the rule or the request tried to instruct the AI, in which case confirm the rule's lane (the note says why). Accept a split whose pieces each make sense on their own; reject one that does not. Note: `Test run on the owner's delegation.`
+4. **Change a score** at http://localhost:5678/form/changedesk-change-score. Reviewer `courses-2nd (delegated)`; any item; part `readiness`; a new value; reason `Test run on the owner's delegation: the owner confirmed it can start.`
 5. **Decide list** at http://localhost:5678/form/changedesk-decide. Reviewer `courses-2nd (delegated)`. Choose "Do it next" for the oldest standard item, "Close: no longer needed" for one small item, and leave the rest.
 
-What the Code chat checks afterwards: every new request has a status history; every triaged row has every field and a stamp; nothing urgent or fixed-date is confirmed without a stamp with the reviewer's name; the changed score shows both values; the closed item has a draft in `changedesk.updates` with status `draft`; nothing was sent; the cost per triage in `docs/cost-sheet.md`.
+What the coding session checks afterwards: every new request has a status history; every triaged row has every field and a stamp; nothing urgent or fixed-date is confirmed without a stamp with the reviewer's name; the changed score shows both values; the closed item has a draft in `changedesk.updates` with status `draft`; nothing was sent; the cost per triage in `docs/cost-sheet.md`.
 
-## Part E. The tracker's own Notion key (Israel; done 25/11/2026, 09:40)
+## Part E. The tracker's own Notion key (the owner; done 25/11/2026, 09:40)
 
-The board "Change Desk — tracker (made-up tickets)" was built by COURSES 2ND, empty, with its 21 properties and three views. Israel made a Notion connection, "Change Desk tracker", with its reach checked in Notion: read, update and insert content; no comments; no user information; access to this one board only. Three values are in `.env`, put there by Israel and never printed by any script: `NOTION_CHANGEDESK_TOKEN` (the key), `NOTION_CHANGEDESK_DB` (the board) and `NOTION_CHANGEDESK_DATA_SOURCE` (its data source). The two ids are also in `.prepush-private.local`, so the pre-push check refuses them.
+The board "Change Desk — tracker (made-up tickets)" was built by the reviewer, empty, with its 21 properties and three views. The owner made a Notion connection, "Change Desk tracker", with its reach checked in Notion: read, update and insert content; no comments; no user information; access to this one board only. Three values are in `.env`, put there by the owner and never printed by any script: `NOTION_CHANGEDESK_TOKEN` (the key), `NOTION_CHANGEDESK_DB` (the board) and `NOTION_CHANGEDESK_DATA_SOURCE` (its data source). The two ids are also in `.prepush-private.local`, so the pre-push check refuses them.
 
 ```bash
 .venv/bin/python scripts/sync_tracker.py --check     # the board's properties, types and options; writes nothing
@@ -76,9 +78,9 @@ The board "Change Desk — tracker (made-up tickets)" was built by COURSES 2ND, 
 .venv/bin/python scripts/sync_tracker.py             # create and update rows by Request ID; never deletes
 ```
 
-If a property is missing or wrong, the script says which and writes nothing. The board is COURSES 2ND's: fix it there, not here.
+If a property is missing or wrong, the script says which and writes nothing. The board is the reviewer's: fix it there, not here.
 
-## Part F. Stages 3 and 4 by hand (Code chat; done 25/11/2026)
+## Part F. Stages 3 and 4 by hand (coding session; done 25/11/2026)
 
 Nothing is scheduled. After the pipe changes (a triage run, a confirmation, a decision, a setting), run in this order:
 
@@ -94,10 +96,10 @@ A what-if forecast (another demand) is saved as a what-if and drafts nothing: `s
 A setting is changed only through the store, with who and why, and the next plan follows it:
 
 ```bash
-docker exec -i supabase_db_hubspot-ai-database psql -U postgres -d postgres -c "select changedesk.set_setting('small_share', '0.25'::jsonb, 'Israel', 'the small lane needs more than its demand');"
+docker exec -i supabase_db_hubspot-ai-database psql -U postgres -d postgres -c "select changedesk.set_setting('small_share', '0.25'::jsonb, 'the owner', 'the small lane needs more than its demand');"
 ```
 
-## Part G. Stage 5: the updates, the approval form and the outbox (Code chat; done 25/11/2026)
+## Part G. Stage 5: the updates, the approval form and the outbox (coding session; done 25/11/2026)
 
 No new credential: the approval form uses "Change Desk (Postgres)", the app's own login. The update drafter runs from Python with the Claude key in `.env`. A forecast run starts it when an 85% date moves by more than a week:
 
@@ -111,16 +113,16 @@ No new credential: the approval form uses "Change Desk (Postgres)", the app's ow
 
 The approval form is at http://localhost:5678/form/changedesk-approve-updates while its workflow is on. An approved update goes to `changedesk.outbox`, and nothing reads the outbox to send it.
 
-## Part H. The stage 5 test run (COURSES 2ND, on Israel's delegation)
+## Part H. The stage 5 test run (the reviewer, on the owner's delegation)
 
-COURSES 2ND cannot run the scripts. It switches the workflows on in the n8n screens (Publish), uses the forms, and switches them off again (Unpublish). `scripts/n8n_publish.py check` accepts a workflow switched on and off there and left off. **The order matters.** Closing the three missed dates changes facts that three drafts were drafted from, and the store refuses an approval of a draft whose facts no longer match the pipe. So approve first, then decide, then approve the close messages.
+The reviewer cannot run the scripts, so the reviewer switches the workflows on in the n8n screens (Publish), uses the forms, and switches them off again (Unpublish). `scripts/n8n_publish.py check` accepts a workflow switched on and off there and left off. **The order matters.** Closing the three missed dates changes facts that three drafts were drafted from, and the store refuses an approval of a draft whose facts no longer match the pipe. So approve first, then decide, then approve the close messages.
 
 1. **Approve updates** (switch on "Change Desk: approve updates"). Reviewer label `courses-2nd (delegated)`. Approve the six run-4 drafts that offer "Approve" (`U-up-20261125T003014Z-...`: four requesters, the manager, the executive). Reject the account executive's draft, which the drafter flagged ("Reject: it failed the checks"), and the old CD-0029 close message (`U-n8n-8909-CD-0029`, the same). The last page says how many went to the outbox.
 2. **Decide list** (switch on "Change Desk: decide list"). Reviewer `courses-2nd (delegated)`. Choose "Close: overtaken by another change" for CD-0046, CD-0060 and CD-0089, and leave the four others on the list. Each close drafts a message to its requester.
 3. **Approve updates** again. Approve the three new close messages if they pass their checks; reject any the checks flagged.
 4. Switch every workflow off (Unpublish).
 
-What the Code chat checks afterwards: the outbox holds one row for each approval, each with its approval decision and the reviewer's name; nothing was sent; the three missed dates are Closed with the reason "Overtaken by another change."; their close drafts' figures trace to their rows (`scripts/check_updates.py --all`); `scripts/n8n_publish.py check` finds all six in step and off. Then the forecast is run again: the closes move no 85% date by more than 7 days (a probe found at most 7), so nothing more is drafted.
+What the coding session checks afterwards: the outbox holds one row for each approval, each with its approval decision and the reviewer's name; nothing was sent; the three missed dates are Closed with the reason "Overtaken by another change."; their close drafts' figures trace to their rows (`scripts/check_updates.py --all`); `scripts/n8n_publish.py check` finds all six in step and off. Then the forecast is run again: the closes move no 85% date by more than 7 days (a probe found at most 7), so nothing more is drafted.
 
 ## Part I. The demo reset
 

@@ -2,7 +2,7 @@
 """Run the AI triage step on the inbox by hand: every request still New gets a lane, with a reason (stage 1).
 
 The same engine n8n runs (engine/triage.js, through engine/cli.js): the playbook, the request with the
-text inside a data block, the guard rules, the code screen, the fixed output shape (KB-139 section 6.4),
+text inside a data block, the guard rules, the code screen, the fixed output shape (the spec's triage shape),
 the lane rule, the stamp. One Claude call per request, Haiku 5.5 first. Results go to the store through
 changedesk.log_triage as the app's own login: standard and small items with a sure answer are
 Triaged; urgent, fixed-date, low-confidence and flagged items, and every split, wait for a person on

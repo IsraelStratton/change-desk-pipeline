@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draft the updates for three audiences behind the update trigger (KB-139 stage 5, R20, R22 to R25). Started by hand,
+"""Draft the updates for three audiences behind the update trigger (the spec's stage 5, R20, R22 to R25). Started by hand,
 or by scripts/forecast.py right after it saves a forecast run. Nothing is scheduled and nothing is sent.
 
 The trigger (R20): an item whose 85% date moved by more than update_trigger_days (setting, 7) between a forecast run

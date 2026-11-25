@@ -22,7 +22,7 @@ sets and n8n does not hold is taken as that default; every value n8n does hold m
 every Code node's JavaScript must match in full. n8n 2.x runs a workflow's published version, not its
 saved draft, so check also reads the published version when there is one: an active workflow's must be
 its latest saved version and match the file, and an inactive one must have none (Publish and Unpublish
-in the n8n screens save a named version; that alone is no difference). COURSES 2ND switches the workflows
+in the n8n screens save a named version; that alone is no difference). The reviewer switches the workflows
 on and off in the n8n screens and cannot run this script: a workflow switched on and off there, and left off,
 is in step (tests/test_n8n_publish.py walks all six through that cycle). One left on is reported with a note.
 

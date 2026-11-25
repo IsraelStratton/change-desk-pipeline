@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Load the made-up history (sample/history.json) into the changedesk schema. KB-139 stage 0, R1.
+"""Load the made-up history (sample/history.json) into the changedesk schema. The spec's stage 0, R1.
 
 Runs as the database owner inside the Supabase db container, like scripts/setup_db.py: loading a
 history is setup work, not something the app's login may do. One transaction: the requests, their
@@ -82,8 +82,9 @@ def settings_reset_sql(conf: dict) -> str:
         value = json.dumps(st["value"])
         if TAG in value:
             raise ValueError("a setting holds the SQL quote tag")
+        source = st["source"].split(":")[0].replace("'", "''")  # a quote in the text must not end the SQL string
         out.append(f"update changedesk.settings set value = {TAG}{value}{TAG}::jsonb, changed_by = '{RESET_BY}', changed_at = now(), "
-                   f"why = 'demo reset: back to the starting value ({st['source'].split(':')[0]})' "
+                   f"why = 'demo reset: back to the starting value ({source})' "
                    f"where key = '{st['key']}' and value is distinct from {TAG}{value}{TAG}::jsonb;")
     return "\n".join(out)
 

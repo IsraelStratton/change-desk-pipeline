@@ -63,7 +63,7 @@ def test_the_fresh_result_is_of_the_committed_set_and_the_live_playbook_unchange
 
 
 def test_the_phone_numbers_in_the_eval_cases_are_from_acmas_fiction_ranges():
-    """Israel, 25/11/2026: before the repository can go public, no case may hold a number that could be a real person's. ACMA
+    """The owner, 25/11/2026: before the repository can go public, no case may hold a number that could be a real person's. ACMA
     reserves mobile 0491 570 006 (and others) and geographic (02) 5550 xxxx for creative works. E-31 was changed and run again
     (its re-run is recorded in results.json); F-24 was in the range already."""
     tuned = {c["case_id"]: c for c in TUNED["cases"]}

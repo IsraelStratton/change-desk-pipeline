@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The cost sheet (R30, KB-137 A5): what each AI call has cost, from the run log alone. Writes docs/cost-sheet.json and
+"""The cost sheet (R30, the trust-layer spec, A5): what each AI call has cost, from the run log alone. Writes docs/cost-sheet.json and
 docs/cost-sheet.md.
 
 Shaped from the GTM pipeline (scripts/cost_sheet.py): every figure comes from changedesk.run_log and the price table

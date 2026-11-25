@@ -86,7 +86,7 @@ select * from changedesk.ranked_standard(current_date);
 -- decided: do it next, merge it, or close it with a reason. An item with a standing "do it next"
 -- has been decided and leaves the list.
 --
--- Build addition to R16 (Israel's decision, 25/11/2026): a fixed-date item whose date has passed goes
+-- Build addition to R16 (the owner's decision, 25/11/2026): a fixed-date item whose date has passed goes
 -- on the list at once, whatever its age, and first: the date was the reason for its lane, so a person
 -- says whether it is still needed. Work already started counts too (In progress), because the reason
 -- for doing it may have gone. For these rows age_limit_days is null, days_over is the days since the

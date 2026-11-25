@@ -1,4 +1,4 @@
-"""KB-137 A1.5 to A1.7 (R29): the control sheet is one page; every line on it points to a file, a test or a log row; it states
+"""The trust-layer spec, A1.5 to A1.7 (R29): the control sheet is one page; every line on it points to a file, a test or a log row; it states
 no legal conclusion and names who would decide at an employer; one table matches process, playbook, agent or tool, approval
 point, owner and eval. Copied from the GTM pipeline's test (tests/test_control_sheet.py) with this build's paths."""
 import re

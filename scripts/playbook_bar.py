@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The push gate for the triage playbook: the live playbook must have been tested, and must meet its bar.
 
-Copied from the GTM pipeline (scripts/playbook_bar.py, KB-137 A3.4) and cut to this build's one playbook.
+Copied from the GTM pipeline (scripts/playbook_bar.py, the trust-layer spec, A3.4) and cut to this build's one playbook.
 For the commit being pushed (scripts/prepush_check.py) and in CI (tests/test_playbook_bar.py):
   - skills/triage-playbook/eval/results.json exists;
   - it was made from exactly the live playbook, the labelled cases and the bar now committed

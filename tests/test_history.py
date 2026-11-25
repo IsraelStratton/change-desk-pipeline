@@ -57,7 +57,7 @@ def test_the_inbox_holds_twelve_new_requests_for_the_triage_step():
 
 
 def test_the_old_rule_starved_small_work_and_missed_fixed_dates():
-    """The history is worked the old way, highest score first. It shows the fault KB-136 section 6.5 found."""
+    """The history is worked the old way, highest score first. It shows the fault the design note found."""
     done = {h["request_id"]: h["changed_at"][:10] for h in DOC["status_history"] if h["to_status"] == "Done"}
     fixed = [r for r in REQS.values() if r.get("lane") == "fixed_date" and r["due_date"] < DOC["as_of"]]
     missed = [r for r in fixed if r["request_id"] not in done or done[r["request_id"]] > r["due_date"]]
@@ -74,7 +74,7 @@ def test_contact_details_appear_once_on_purpose_and_are_made_up():
 
 
 def test_the_demo_reset_puts_the_store_back_to_the_history_and_the_starting_settings():
-    """COURSES 2ND's guard (25/11/2026): load_history.py --reset gives a demo the made-up history and the starting settings
+    """The reviewer's guard (25/11/2026): load_history.py --reset gives a demo the made-up history and the starting settings
     (40 hours a week, the 20/70 split), and clears everything stages 3 to 5 added (forecast runs, triggers, drafts, the
     outbox). Run here as the owner inside a transaction that is rolled back, so the live store is untouched."""
     import sys
