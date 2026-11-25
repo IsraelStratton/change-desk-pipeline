@@ -2,7 +2,7 @@
 
 A bug and enhancement pipeline for a business systems team, on made-up tickets. A request comes in by form. One AI step triages it against a playbook, and a published rule in code puts it in one of four lanes. A plain script makes the week's plan from a published split of the week. Pipe health is watched lane by lane, and delivery is forecast lane by lane. When a forecast date moves by more than a week, updates are drafted for three readers: the requester, the desk manager and the executive. A person approves each one. Agents draft; a person approves. Nothing is sent to anyone.
 
-A showcase build, made to a written build spec, with the design and the reasons for it in a separate design note. **All seven stages, 0 to 6, are built**, and the whole flow was tested end to end on 25/11/2026. The repository is private.
+A showcase build, made to a written build spec, with the design and the reasons for it in a separate design note. **All seven stages, 0 to 6, are built**, and the whole flow was tested end to end on 25/11/2026. The repository is public.
 
 Every ticket, name, role and system here is made up. No ticket, name or wording comes from any employer, and nothing connects to a real ticket system.
 

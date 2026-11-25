@@ -2,7 +2,7 @@
 """Check the commits about to be pushed. Run it before every push.
 
 Copied from the GTM pipeline (scripts/prepush_check.py) and cut to what this build has. The repository
-is private now and may go public on the owner's later yes, so it is checked as if it were public.
+is public (since 25/11/2026, on the owner's yes), so every push is checked for what a public repository must not hold.
 
 For every outgoing commit (origin/<branch>..HEAD by default; every commit on the first push):
   - author and committer email must be a GitHub no-reply address
