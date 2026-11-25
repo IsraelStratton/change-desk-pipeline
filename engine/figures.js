@@ -173,18 +173,95 @@ function factsFor(fig, facts) {
   return [];
 }
 
-function traceFigures(text, pack) {
-  const figures = figuresIn(text, pack).map((fig) => {
-    const found = fig.kind === 'number_word' ? [] : factsFor(fig, pack.facts);
-    return { text: fig.text, kind: fig.kind, value: fig.value, unit: fig.unit || null, fact_id: found.length ? found[0].id : null,
-      also: found.slice(1).map((f) => f.id) };
+// ---------------------------------------------------------------- which fact a figure is (fixed after test run n8n-8910)
+//
+// Several facts can hold the same value: CD-0107's 95% date and CD-0120's 85% date were both 3 March 2027, and this
+// week's plan gave the small lane 8.1 hours, the same as the hours that arrive in the forecast. The first version took the
+// first fact with the value, so the trace could cite another request's row, though the figure in the text was right. Now
+// a figure is the fact (1) of the request it sits beside: the last request id before it in its paragraph; (2) with the
+// exact value, before one it only rounds to; (3) whose own words, those no other candidate shares, are in the figure's
+// sentence, most of all near it. A figure beside one request that matches only another request's fact is a problem.
+
+const TRACE_STOP = new Set(['a', 'an', 'the', 'of', 'to', 'for', 'and', 'or', 'in', 'on', 'by', 'is', 'it', 'its', 'at', 'as', 'be', 'was',
+  'are', 'with', 'that', 'from', 'now', 'we', 'our', 'your', 'you', 'this', 'these', 'has', 'have', 'will', 'which', 'each', 'its']);
+const ID_ANY_RE = /\bCD-\d{4,}\b/g;
+
+function traceWords(s) {
+  return new Set((String(s || '').toLowerCase().replace(/cd-\d+/g, ' ').match(/[a-z]+/g) || []).filter((w) => w.length > 1 && !TRACE_STOP.has(w)));
+}
+
+function itemOf(f) {
+  if (f.item) return f.item;
+  const m = /^(CD-\d{4,})\b/.exec(String(f.says || ''));
+  return m ? m[1] : null;
+}
+
+// The request a figure sits beside: the last request id before it in the same paragraph.
+function itemBeside(text, at) {
+  const para = Math.max(text.lastIndexOf('\n\n', at), 0);
+  let last = null;
+  ID_ANY_RE.lastIndex = 0;
+  let m;
+  while ((m = ID_ANY_RE.exec(text)) !== null && m.index < at) if (m.index >= para) last = m[0];
+  return last;
+}
+
+// A sentence ends at a full stop, question or exclamation mark followed by a space, or at a line break; the point in
+// "1.3" ends nothing.
+function sentenceAround(text, at) {
+  const ends = (i) => text[i] === '\n' || (/[.!?]/.test(text[i]) && (i + 1 >= text.length || /\s/.test(text[i + 1])));
+  let a = at;
+  while (a > 0 && !ends(a - 1)) a--;
+  let b = at;
+  while (b < text.length && !ends(b)) b++;
+  return text.slice(a, b);
+}
+
+function exactly(fig, f) {
+  if (fig.kind === 'percent') return Number(f.value) * 100 === fig.value;
+  if (fig.kind === 'number') return Number(f.value) === fig.value;
+  return true;
+}
+
+function bestFact(fig, found, text) {
+  if (found.length < 2 && !(found.length === 1 && fig.kind !== 'id')) return { fact: found[0] || null, elsewhere: false };
+  const beside = fig.kind === 'id' ? null : itemBeside(text, fig.at);
+  const near = traceWords(text.slice(Math.max(0, fig.at - 60), fig.at + fig.text.length + 30));
+  const sentence = traceWords(sentenceAround(text, fig.at));
+  const words = found.map((f) => traceWords(f.says));
+  let best = null;
+  let bestScore = -Infinity;
+  found.forEach((f, i) => {
+    const others = new Set();
+    words.forEach((ws, j) => { if (j !== i) ws.forEach((w) => others.add(w)); });
+    const own = [...words[i]].filter((w) => !others.has(w));
+    const item = fig.kind === 'id' ? null : itemOf(f);
+    let score = item && beside ? (item === beside ? 100 : -100) : 0;
+    if (exactly(fig, f)) score += 20;
+    score += 3 * own.filter((w) => near.has(w)).length + own.filter((w) => sentence.has(w)).length;
+    if (score > bestScore) { best = f; bestScore = score; }
   });
-  return { figures, untraced: figures.filter((f) => !f.fact_id && f.kind !== 'number_word'), in_words: figures.filter((f) => f.kind === 'number_word') };
+  const item = fig.kind === 'id' ? null : itemOf(best);
+  return { fact: best, elsewhere: Boolean(item && beside && item !== beside), beside };
+}
+
+function traceFigures(text, pack) {
+  const src = String(text || '');
+  const figures = figuresIn(src, pack).map((fig) => {
+    const found = fig.kind === 'number_word' ? [] : factsFor(fig, pack.facts);
+    const pick = bestFact(fig, found, src);
+    const out = { text: fig.text, kind: fig.kind, value: fig.value, unit: fig.unit || null, fact_id: pick.fact ? pick.fact.id : null,
+      also: found.filter((f) => !pick.fact || f.id !== pick.fact.id).map((f) => f.id) };
+    if (pick.elsewhere) out.beside = pick.beside;
+    return out;
+  });
+  return { figures, untraced: figures.filter((f) => !f.fact_id && f.kind !== 'number_word'), in_words: figures.filter((f) => f.kind === 'number_word'),
+    elsewhere: figures.filter((f) => f.beside) };
 }
 
 // ---------------------------------------------------------------- exports (not pasted into n8n)
 
 const FIGURES = {
-  showDate, showFact, trimNumber, figuresIn, titlesOf, factsFor, traceFigures, maskSpan, roundTo,
+  showDate, showFact, trimNumber, figuresIn, titlesOf, factsFor, traceFigures, maskSpan, roundTo, itemBeside, itemOf,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = FIGURES;

@@ -479,7 +479,7 @@
    "case_id": "E-31",
    "requester_role": "Support agent",
    "title": "Fix the contact details on one customer record",
-   "body": "The Contact record for Sam Rivers at Example Freight has the wrong email and phone. It should be sam.rivers@freight.example and +61 400 111 222. The old ones bounce.",
+   "body": "The Contact record for Sam Rivers at Example Freight has the wrong email and phone. It should be sam.rivers@freight.example and +61 491 570 006. The old ones bounce.",
    "label": {
     "lane": "small",
     "size_band": "small",

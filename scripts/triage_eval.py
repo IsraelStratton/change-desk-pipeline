@@ -13,6 +13,7 @@ that meets every line is kept: Haiku 5.5 first, Sonnet 5.5 only where Haiku fall
   python scripts/triage_eval.py eval --rounds 1 --only E-33,E-34
   python scripts/triage_eval.py eval --log --save                      # also the run log and the results files
   python scripts/triage_eval.py eval --models claude-haiku-5-5,claude-sonnet-5-5 --log --save
+  python scripts/triage_eval.py eval --only E-31 --log --merge --why "..."      # run one changed case again, into results.json
   python scripts/triage_eval.py eval --cases skills/triage-playbook/eval/fresh-cases.json --log --save --results results-fresh
                                                                        # stage 6: the fresh set, once, the playbook unchanged
 
@@ -154,11 +155,32 @@ def results_markdown(out: dict) -> str:
                 cells.append(str(s[key]))
         lines.append(f"| {label} | | " + " | ".join(cells) + " |")
     lines += ["", f"Kept: **{out['kept_model'] or 'none: no model met every line'}**.", ""]
+    for r in out.get("reruns", []):
+        lines.append(f"Re-run: {', '.join(r['cases'])} in run {r['run_id']} ({r['ran_at']}), the playbook, bar and model unchanged; its rows "
+                     f"replace the first run's, and the lines above are worked out from all the rows. Why: {r['why']}")
+        lines.append("")
     for m, s in out["summaries"].items():
         if s["misses"]:
             lines.append(f"Misses for {m}: {', '.join(s['misses'])}.")
     lines += ["", "Every request is made up. The figures show direction, not size.", ""]
     return "\n".join(lines)
+
+
+def merge_rerun(saved: dict, rerun: dict, bar: dict, prices: dict, cases_text: str, why: str) -> dict:
+    """A saved result with some cases run again: their old rows are replaced by the new ones (every round), the lines are
+    worked out again from all the rows, and the re-run is recorded with its reason. The playbook, the bar and the model must
+    be the ones the saved result used: a re-run that changed any of them is not a re-run."""
+    if rerun["playbook"]["sha256"] != saved["playbook"]["sha256"] or rerun["bar_sha256"] != saved["bar_sha256"]:
+        raise LookupError("the re-run used another playbook or bar than the saved result")
+    if set(rerun["summaries"]) != set(saved["summaries"]) or rerun["rounds"] != saved["rounds"]:
+        raise LookupError("the re-run used other models or rounds than the saved result")
+    again = {r["case_id"] for r in rerun["rows"]}
+    rows = [r for r in saved["rows"] if r["case_id"] not in again] + rerun["rows"]
+    out = dict(saved, rows=rows, cases_sha256=sha256(cases_text))
+    out["summaries"] = {m: summarise([r for r in rows if r["model"] == m], bar) for m in saved["summaries"]}
+    out["kept_model"] = kept_model(out["summaries"], prices)
+    out["reruns"] = saved.get("reruns", []) + [{"cases": sorted(again), "run_id": rerun["run_id"], "ran_at": rerun["ran_at"], "why": why}]
+    return out
 
 
 def run_eval(args) -> int:
@@ -232,6 +254,16 @@ def run_eval(args) -> int:
                                       [r["call"] for r in rows[i:i + 100]], [], [])
                 n += len(rows[i:i + 100])
         print(f"Logged {n} eval calls to changedesk.run_log (source eval).")
+    if args.merge:
+        if not args.only or not args.why:
+            print("Not merged: --merge needs --only (the cases run again) and --why (the reason, kept in the result).")
+            return 2
+        merged = merge_rerun(json.loads((EVAL / f"{args.results}.json").read_text(encoding="utf-8")), out, bar, prices, cases_text, args.why)
+        (EVAL / f"{args.results}.json").write_text(json.dumps(merged, indent=1) + "\n", encoding="utf-8")
+        (EVAL / f"{args.results}.md").write_text(results_markdown(merged), encoding="utf-8")
+        print(f"Merged the re-run of {args.only} into skills/triage-playbook/eval/{args.results}.json and .md.")
+        print(results_markdown(merged))
+        return 0
     if args.save:
         if args.only:
             print("Not saved: a run on some cases only is not a result.")
@@ -255,6 +287,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--save", action="store_true", help="write the results files next to the cases")
     e.add_argument("--playbook", help="a candidate playbook file to test instead of the live one")
     e.add_argument("--cases", help="a labelled set to grade instead of cases.json (stage 6: eval/fresh-cases.json)")
+    e.add_argument("--merge", action="store_true", help="with --only: replace those cases' rows in the saved result (--results)")
+    e.add_argument("--why", help="with --merge: why the cases were run again (kept in the result)")
     e.add_argument("--results", default="results", help="the results file name, without the extension")
     args = ap.parse_args(argv)
     try:

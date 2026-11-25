@@ -230,6 +230,7 @@ function updateProblems(pack, d) {
   const t = traceFigures(text, pack);
   if (t.untraced.length) problems.push(`figures with no source in the pack: ${t.untraced.map((f) => `"${f.text}"`).join(', ')}`);
   if (t.in_words.length) problems.push(`figures written in words: ${t.in_words.map((f) => `"${f.text}"`).join(', ')}`);
+  if (t.elsewhere.length) problems.push(`figures beside one request that match only another request's facts: ${t.elsewhere.map((f) => `"${f.text}" (beside ${f.beside})`).join(', ')}`);
   const cov = coverage(pack, body);
   for (const c of cov) if (!c.ok) problems.push(`${c.request_id} is not answered: ${c.missing.join(', ')}`);
   // The internal-word checks read the text with the titles taken out: a title is the requester's own words.

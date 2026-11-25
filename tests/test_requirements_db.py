@@ -7,6 +7,7 @@ Skipped where there is no local store (CI).
 """
 import json
 from datetime import date
+import datetime as _dt
 import sys
 from pathlib import Path
 
@@ -17,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import desk_db  # noqa: E402
 
 MODEL = "claude-haiku-5-5"
-NOW = "2026-11-25T01:00:00Z"
+# Just after the wall clock: a row a test stamps NOW must sort after the rows the store stamps with now() (add_request's first
+# history row). A fixed time worked only until the clock passed it (found 25/11/2026, after 01:00 UTC).
+NOW = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=10)).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 @pytest.fixture(scope="module")
@@ -395,9 +398,9 @@ def test_r16_build_addition_a_fixed_date_past_its_date_is_on_the_list_at_once_wh
     passed = [r for r in rows if r["why"] == "its fixed date has passed"]
     left = {r["request_id"] for r in desk_db.rows(db, "select request_id from changedesk.requests where request_id = any(%s) "
                                                      "and status in ('Triaged', 'Planned', 'In progress')", (MISSED,))}
-    if len(left) < len(MISSED):
-        pytest.skip("the missed dates have been decided already (after the test run): CD-0149 below still shows the rule")
-    assert {r["request_id"] for r in passed} >= left, "the three missed dates show on the list"
+    # Before the test run, the three missed dates were on the list; after it (all three closed) left is empty, and CD-0149
+    # below still shows the rule.
+    assert {r["request_id"] for r in passed} >= left, "every missed date still open shows on the list"
     assert all(r["lane"] == "fixed_date" and r["age_limit_days"] is None for r in passed)
     assert all(r["days_over"] == (date(2026, 11, 25) - date.fromisoformat(r["due_date"])).days for r in passed)
     assert [r["why"] for r in rows][:len(passed)] == ["its fixed date has passed"] * len(passed), "they come first"

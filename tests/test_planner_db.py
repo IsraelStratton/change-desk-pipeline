@@ -2,6 +2,7 @@
 agrees with the store's ranking (R11, R13), the plan is saved only through its checked function (R5, R12), a setting
 change changes the next plan (R14), the health figures (R15), the forecast gives every open item one of three (R18),
 the update trigger (R20), and the tracker view (stage 3). Skipped where there is no local store (CI)."""
+import datetime as _dt
 import sys
 from datetime import date, timedelta
 from pathlib import Path
@@ -15,7 +16,9 @@ import desk_state  # noqa: E402
 import forecast as F  # noqa: E402
 import planner as P  # noqa: E402
 
-NOW = "2026-11-25T01:00:00Z"
+# Just after the wall clock: a row a test stamps NOW must sort after the rows the store stamps with now() (add_request's first
+# history row). A fixed time worked only until the clock passed it (found 25/11/2026, after 01:00 UTC).
+NOW = (_dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(minutes=10)).isoformat(timespec="seconds").replace("+00:00", "Z")
 WEEK = date(2026, 11, 23)
 
 

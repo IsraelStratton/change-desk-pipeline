@@ -60,3 +60,11 @@ def test_the_run_order_starts_at_the_form_and_a_loop_reads_its_body_before_what_
     assert order[:3] == ["Start Approval", "Read Drafts", "Build Form"] and order.index("Approve Updates") > order.index("Approval")
     nodes, edges = parse(bd.diagram(bd.workflow("triage")))
     assert ("s7", "s8", "next one") in edges and any(label == "all done" for _, _, label in edges), "the loop's two ways out are labelled"
+
+
+def test_the_readme_reads_cold_with_no_internal_names():
+    """The build owner, 25/11/2026: the README names no internal page, initiative, decision record, session or person; it
+    says what each is in plain words, so someone outside the project can read it."""
+    text = (REPO / "README.md").read_text(encoding="utf-8")
+    found = re.findall(r"\b(?:KB|INIT|ADR|SOR|PROJ)-\d+\b|COURSES 2ND|courses-2nd|Code chat|planning chat|Evolution Copilot|\bIsrael\b", text, re.I)
+    assert found == []

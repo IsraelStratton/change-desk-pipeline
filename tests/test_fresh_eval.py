@@ -60,3 +60,20 @@ def test_the_fresh_result_is_of_the_committed_set_and_the_live_playbook_unchange
     assert fresh["playbook"]["sha256"] == tuned["playbook"]["sha256"] == hashlib.sha256(live.encode("utf-8")).hexdigest()
     assert fresh["playbook"]["version"] == "1.0.2" and fresh["cases"] == len(FRESH["cases"])
     assert fresh["bar_sha256"] == tuned["bar_sha256"], "the same bar, set before the first run of stage 1"
+
+
+def test_the_phone_numbers_in_the_eval_cases_are_from_acmas_fiction_ranges():
+    """Israel, 25/11/2026: before the repository can go public, no case may hold a number that could be a real person's. ACMA
+    reserves mobile 0491 570 006 (and others) and geographic (02) 5550 xxxx for creative works. E-31 was changed and run again
+    (its re-run is recorded in results.json); F-24 was in the range already."""
+    tuned = {c["case_id"]: c for c in TUNED["cases"]}
+    fresh = {c["case_id"]: c for c in FRESH["cases"]}
+    assert "+61 491 570 006" in tuned["E-31"]["body"] and "+61 2 5550 1234" in fresh["F-24"]["body"]
+    phone = re.compile(r"\+?\d[\d\s().-]{7,}\d")
+    for c in list(tuned.values()) + list(fresh.values()):
+        for m in phone.findall(" ".join(str(c.get(k) or "") for k in ("body", "requester_says_breaks", "requester_says_harm"))):
+            digits = re.sub(r"\D", "", m)
+            if len(digits) >= 8:
+                assert digits.endswith("491570006") or "25550" in digits, (c["case_id"], "a number outside the fiction ranges")
+    results = json.loads((EVAL / "results.json").read_text(encoding="utf-8"))
+    assert [r["cases"] for r in results["reruns"]] == [["E-31"]] and "ACMA" in results["reruns"][0]["why"]

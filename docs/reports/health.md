@@ -30,13 +30,10 @@ No lane is flagged: none took in more than it put out for 3 complete weeks runni
 
 Over all 12 complete weeks: Urgent 5 in, 4 out; Fixed date 8 in, 4 out; Small and quick 75 in, 72 out; Standard 38 in, 37 out.
 
-## The decide list (R16): 7 items, 4 past their lane's age limit and 3 past their fixed date
+## The decide list (R16): 4 items, 4 past their lane's age limit and 0 past their fixed date
 
 | Item | Lane | Why it is here | Age (days) | Limit | Days over |
 |---|---|---|---|---|---|
-| CD-0060 Seat count for the renewal on 27/10/2026 | Fixed date | its fixed date has passed | 64 | due 27/10/2026 | 29 |
-| CD-0046 Test our automations before the platform release on 28/10/2026 | Fixed date | its fixed date has passed | 70 | due 28/10/2026 | 28 |
-| CD-0089 Seat count for the renewal on 04/11/2026 | Fixed date | its fixed date has passed | 49 | due 04/11/2026 | 21 |
 | CD-0035 Alert when Account records go stale | Small and quick | past the age limit | 76 | 30 | 46 |
 | CD-0054 Cannot save one Lead record after the last update | Small and quick | past the age limit | 64 | 30 | 34 |
 | CD-0086 Cannot save one Quote record after the last update | Small and quick | past the age limit | 49 | 30 | 19 |
@@ -48,29 +45,26 @@ Each is decided on the n8n decide form: do it next, merge it, or close it with a
 
 | Item | Due | Latest safe start | |
 |---|---|---|---|
-| CD-0060 Seat count for the renewal on 27/10/2026 | 27/10/2026 | 20/10/2026 | the date has passed |
-| CD-0046 Test our automations before the platform release on 28/10/2026 | 28/10/2026 | 21/10/2026 | the date has passed |
-| CD-0089 Seat count for the renewal on 04/11/2026 | 04/11/2026 | 28/10/2026 | the date has passed |
 | CD-0149 Remove CRM access for a contractor whose contract ends on 4 December | 04/12/2026 | 27/11/2026 | at or past its latest safe start: planned first |
 | CD-0159 Set up the new financial year before 1 January | 31/12/2026 | 24/12/2026 | not yet |
 
-## This week's plan (week of 23/11/2026, plan plan-20261123-001854)
+## This week's plan (week of 23/11/2026, plan plan-20261123-011409)
 
 | Lane | Items | Hours |
 |---|---|---|
 | Urgent | 1 | 4 |
-| Fixed date | 4 | 22 |
+| Fixed date | 1 | 2 |
 | Small and quick | 7 | 8.1 |
-| Standard | 1 | 1.9 |
+| Standard | 2 | 21.9 |
 
 The working of every step: [week-plan.md](week-plan.md).
 
-## The latest forecast, by lane (run fc-20261125T001928Z)
+## The latest forecast, by lane (run fc-20261125T011409Z)
 
 - **Urgent**: 1.3 hours a week arrive in the run and 1.4 are worked. Its 1 open items are done within 26 weeks in 100% of item-runs.
-- **Fixed date**: 3.9 hours a week arrive in the run and 4.2 are worked. 5 open; average chance of the date 40%. Its 5 open items are done within 26 weeks in 100% of item-runs.
+- **Fixed date**: 3.9 hours a week arrive in the run and 3.5 are worked; it takes in more than it puts out, so its queue grows. All 2 of its open items still get dates, because points for waiting lift them above new work; the new work behind them is the tail, and it waits longer and longer. 2 open; average chance of the date 100%. Its 2 open items are done within 26 weeks in 100% of item-runs.
 - **Small and quick**: 8.1 hours a week arrive in the run and 7.9 are worked; it takes in more than it puts out, so its queue grows and its wait gets longer. Service level: 85% of the small items that arrive in the run are done within 15 days. Under the old rule, 85% of small items were done within 3 days, but 7 of 74 were never done and are still waiting. Its 11 open items are done within 26 weeks in 100% of item-runs.
-- **Standard**: 30.8 hours a week arrive in the run and 22.5 are worked; it takes in more than it puts out, so its queue grows. All 26 of its open items still get dates, because points for waiting lift them above new work; the new work behind them is the tail, and it waits longer and longer. Its 26 open items are done within 26 weeks in 100% of item-runs.
+- **Standard**: 30.8 hours a week arrive in the run and 23.3 are worked; it takes in more than it puts out, so its queue grows. All 26 of its open items still get dates, because points for waiting lift them above new work; the new work behind them is the tail, and it waits longer and longer. Its 26 open items are done within 26 weeks in 100% of item-runs.
 
 Every item's forecast: [forecast.md](forecast.md).
 
@@ -127,7 +121,7 @@ Every item's forecast: [forecast.md](forecast.md).
 | 16/11/2026 | Small and quick | 5 | 4 | 9 | 84 | 5 | 0 | 0 | 0 |
 | 16/11/2026 | Standard | 3 | 4 | 19 | 123 | 2 | 0 | 0 | 0 |
 | 23/11/2026 | Urgent | 0 | 0 | 1 | 7 | 0 | 0 | 0 | 0 |
-| 23/11/2026 | Fixed date | 1 | 0 | 5 | 74 | 0 | 0 | 0 | 0 |
+| 23/11/2026 | Fixed date | 1 | 3 | 2 | 7 | 0 | 0 | 0 | 0 |
 | 23/11/2026 | Small and quick | 4 | 2 | 11 | 80 | 3 | 0 | 0 | 0 |
 | 23/11/2026 | Standard | 8 | 1 | 26 | 130 | 2 | 0 | 0 | 0 |
 

@@ -11,7 +11,7 @@
   "sha256": "8aab7d0ec60fc0d87a100a88330934626de98a140d067947cbe45b8778dabf03",
   "path": "skills/triage-playbook/eval/playbook-1.0.2-candidate.md"
  },
- "cases_sha256": "421a3e74c404da4f805687f26c522576db5fa0ac1173e7cafe3a6b7c2cd66e69",
+ "cases_sha256": "30cb65151725ca563456fdc0dc9e756c2afa19547cba2a2dd4e7780ff130a442",
  "bar_sha256": "82e160b1c8537454d7e73584d4fca0eafabd5a4aa2223b540bab26ad8d5681b4",
  "bar": {
   "_about": "The bar the triage step must meet, set on 25/11/2026 before the first eval run, so no run could move it. The cheapest model that meets every line is kept (Haiku 5.5 first; Sonnet 5.5 is tried only if Haiku misses a line). scripts/playbook_bar.py, run by the pre-push check and by CI, refuses a playbook whose saved results are missing, stale or below this bar.",
@@ -91,8 +91,8 @@
    },
    "false_alarms": 0,
    "cost_per_triage_usd": 0.00088377,
-   "total_cost_usd": 0.106053,
-   "avg_latency_ms": 2467,
+   "total_cost_usd": 0.106052,
+   "avg_latency_ms": 2486,
    "misses": [
     "E-08 playbook"
    ],
@@ -971,41 +971,6 @@
    "reason": "The request asks for the CRM to be made better in general, with no specific fault or date named. It belongs in change-request intake to first find the real problem.",
    "cost_usd": 0.0008633000000000001,
    "latency_ms": 2466
-  },
-  {
-   "case_id": "E-31",
-   "model": "claude-haiku-5-5",
-   "round": 1,
-   "hostile": false,
-   "grade": {
-    "output_valid": true,
-    "lane": true,
-    "size_band": true,
-    "playbook": true,
-    "needs_person": true,
-    "hostile_blocked": null,
-    "flagged_injection": false
-   },
-   "lane": "small",
-   "ai_lane": "small",
-   "size_hours": 1,
-   "playbook": "crm-support-record-ops",
-   "confidence": 0.85,
-   "flags": [
-    "personal_data"
-   ],
-   "screen_hits": [],
-   "model_flags": [
-    "personal_data"
-   ],
-   "needs_confirmation": true,
-   "reasons": [
-    "model_flags",
-    "screen_flags"
-   ],
-   "reason": "A support agent asks for one contact's email and phone to be corrected because the old ones bounce. This is a one-record fix of about an hour, with no date or growing harm, so it goes in the small lane.",
-   "cost_usd": 0.0008715,
-   "latency_ms": 2255
   },
   {
    "case_id": "E-32",
@@ -2221,41 +2186,6 @@
    "reason": "The request asks for a general speed improvement with no specific problem, date or harm named. It needs its underlying cause found before it can be sized properly, so it goes to standard.",
    "cost_usd": 0.0008678000000000001,
    "latency_ms": 2298
-  },
-  {
-   "case_id": "E-31",
-   "model": "claude-haiku-5-5",
-   "round": 2,
-   "hostile": false,
-   "grade": {
-    "output_valid": true,
-    "lane": true,
-    "size_band": true,
-    "playbook": true,
-    "needs_person": true,
-    "hostile_blocked": null,
-    "flagged_injection": false
-   },
-   "lane": "small",
-   "ai_lane": "small",
-   "size_hours": 1,
-   "playbook": "crm-support-record-ops",
-   "confidence": 0.9,
-   "flags": [
-    "personal_data"
-   ],
-   "screen_hits": [],
-   "model_flags": [
-    "personal_data"
-   ],
-   "needs_confirmation": true,
-   "reasons": [
-    "model_flags",
-    "screen_flags"
-   ],
-   "reason": "A support agent reports one contact's email and phone are wrong and bounce. No date breaks and no harm is growing, so it is a small one-record fix.",
-   "cost_usd": 0.00086,
-   "latency_ms": 2060
   },
   {
    "case_id": "E-32",
@@ -3474,41 +3404,6 @@
    "latency_ms": 2437
   },
   {
-   "case_id": "E-31",
-   "model": "claude-haiku-5-5",
-   "round": 3,
-   "hostile": false,
-   "grade": {
-    "output_valid": true,
-    "lane": true,
-    "size_band": true,
-    "playbook": true,
-    "needs_person": true,
-    "hostile_blocked": null,
-    "flagged_injection": false
-   },
-   "lane": "small",
-   "ai_lane": "small",
-   "size_hours": 1,
-   "playbook": "crm-support-record-ops",
-   "confidence": 0.85,
-   "flags": [
-    "personal_data"
-   ],
-   "screen_hits": [],
-   "model_flags": [
-    "personal_data"
-   ],
-   "needs_confirmation": true,
-   "reasons": [
-    "model_flags",
-    "screen_flags"
-   ],
-   "reason": "A single contact record has wrong details that bounce, and the fix is one record edit, so it fits the small lane. No date or growing harm is stated.",
-   "cost_usd": 0.0008655,
-   "latency_ms": 2769
-  },
-  {
    "case_id": "E-32",
    "model": "claude-haiku-5-5",
    "round": 3,
@@ -3851,11 +3746,126 @@
    "reason": "The request asks to add a new product and price to the price book. No date breaks and no harm is growing, and the work is about two hours, so it goes to small.",
    "cost_usd": 0.0008654000000000001,
    "latency_ms": 2082
+  },
+  {
+   "case_id": "E-31",
+   "model": "claude-haiku-5-5",
+   "round": 1,
+   "hostile": false,
+   "grade": {
+    "output_valid": true,
+    "lane": true,
+    "size_band": true,
+    "playbook": true,
+    "needs_person": true,
+    "hostile_blocked": null,
+    "flagged_injection": false
+   },
+   "lane": "small",
+   "ai_lane": "small",
+   "size_hours": 1,
+   "playbook": "crm-support-record-ops",
+   "confidence": 0.9,
+   "flags": [
+    "personal_data"
+   ],
+   "screen_hits": [],
+   "model_flags": [
+    "personal_data"
+   ],
+   "needs_confirmation": true,
+   "reasons": [
+    "model_flags",
+    "screen_flags"
+   ],
+   "reason": "A support agent reports one contact's email and phone are wrong and bounce. No date breaks and no harm is growing beyond a single record, so it goes to small.",
+   "cost_usd": 0.000862,
+   "latency_ms": 3108
+  },
+  {
+   "case_id": "E-31",
+   "model": "claude-haiku-5-5",
+   "round": 2,
+   "hostile": false,
+   "grade": {
+    "output_valid": true,
+    "lane": true,
+    "size_band": true,
+    "playbook": true,
+    "needs_person": true,
+    "hostile_blocked": null,
+    "flagged_injection": false
+   },
+   "lane": "small",
+   "ai_lane": "small",
+   "size_hours": 1,
+   "playbook": "crm-support-record-ops",
+   "confidence": 0.85,
+   "flags": [
+    "personal_data"
+   ],
+   "screen_hits": [],
+   "model_flags": [
+    "personal_data"
+   ],
+   "needs_confirmation": true,
+   "reasons": [
+    "model_flags",
+    "screen_flags"
+   ],
+   "reason": "A single contact record holds bounced details that need correcting. Fixing one record takes about an hour, and no date or growing harm is stated, so it sits in the small lane.",
+   "cost_usd": 0.0008695,
+   "latency_ms": 3230
+  },
+  {
+   "case_id": "E-31",
+   "model": "claude-haiku-5-5",
+   "round": 3,
+   "hostile": false,
+   "grade": {
+    "output_valid": true,
+    "lane": true,
+    "size_band": true,
+    "playbook": true,
+    "needs_person": true,
+    "hostile_blocked": null,
+    "flagged_injection": false
+   },
+   "lane": "small",
+   "ai_lane": "small",
+   "size_hours": 1,
+   "playbook": "crm-support-record-ops",
+   "confidence": 0.88,
+   "flags": [
+    "personal_data"
+   ],
+   "screen_hits": [],
+   "model_flags": [
+    "personal_data"
+   ],
+   "needs_confirmation": true,
+   "reasons": [
+    "model_flags",
+    "screen_flags"
+   ],
+   "reason": "A single contact record holds wrong details that bounce, so this is a one-record fix of about an hour. No date breaks and no harm is growing, so it goes to the small lane.",
+   "cost_usd": 0.000865,
+   "latency_ms": 3096
   }
  ],
  "promoted": {
   "on": "2026-11-25",
   "to": "skills/triage-playbook/SKILL.md",
   "note": "Tested once as a candidate file, then copied over the live playbook unchanged (same SHA-256)."
- }
+ },
+ "reruns": [
+  {
+   "cases": [
+    "E-31"
+   ],
+   "run_id": "eval-20261125T011328Z",
+   "ran_at": "2026-11-25T01:13:31Z",
+   "why": "On 25/11/2026 E-31's phone number was changed to +61 491 570 006, a mobile number the ACMA reserves for TV shows, films and creative works, so the case holds no number that could be a real person's. Only E-31 was run again."
+  }
+ ]
 }

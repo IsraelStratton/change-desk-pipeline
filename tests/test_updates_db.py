@@ -70,10 +70,10 @@ def stand_in(figs: Engine, pack: dict) -> str:
 def stage5(db):
     """Two forecast runs either side of a large change, the trigger logged, the packs built and drafted, the drafts logged."""
     *_, rows, lanes, _n = F.run_forecast(db, WEEK, runs=120)
-    log_run(db, "fc-u-a", rows, lanes, "2026-11-25T01:00:00Z")
+    log_run(db, "fc-u-a", rows, lanes, "2099-01-01T01:00:00Z")
     db.execute("select changedesk.set_setting('hours_per_week', '24'::jsonb, 'desk-lead (test)', 'stage 5 test, rolled back')")
     *_, rows, lanes, _n = F.run_forecast(db, WEEK, runs=120)
-    log_run(db, "fc-u-b", rows, lanes, "2026-11-25T02:00:00Z")
+    log_run(db, "fc-u-b", rows, lanes, "2099-01-01T02:00:00Z")
     run = DU.forecast_run(db, "fc-u-b")
     prev = DU.previous_run(db, run)
     triggers = DU.find_triggers(db, run, prev, 7)

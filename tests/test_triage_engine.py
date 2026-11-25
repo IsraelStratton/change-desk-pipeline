@@ -112,7 +112,7 @@ def test_r3_ordinary_ticket_words_do_not_trip_the_screen(triage_eng, pb):
 
 
 def test_personal_data_is_flagged(triage_eng, pb):
-    s = triage_eng.call("screenRequest", pb, {"title": "Fix a contact", "body": "It should be sam@freight.example and +61 400 111 222."})
+    s = triage_eng.call("screenRequest", pb, {"title": "Fix a contact", "body": "It should be sam@freight.example and +61 491 570 006."})
     assert s["flags"] == ["personal_data"]
 
 

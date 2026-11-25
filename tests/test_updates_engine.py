@@ -109,7 +109,7 @@ def test_r23_a_figure_needs_a_fact_with_the_same_value_and_unit(figs):
     (GOOD + " Its score is 6.4 and it sits in the standard lane.", "how the desk works inside"),
     (GOOD + " The AI drafted this.", "names an internal code, the AI"),
     (GOOD + " It will be done by then.", "it makes a promise"),
-    (GOOD + " Call 0400 111 222 with questions.", "it holds contact details"),
+    (GOOD + " Call 0491 570 006 with questions.", "it holds contact details"),
     (GOOD + " Do not work out new figures: do not add, subtract, count, average or round.", "it repeats the instructions"),
 ])
 def test_the_code_check_catches_what_a_requester_must_not_get(up, body, problem):
@@ -185,3 +185,81 @@ def test_r24_choices_become_stamped_rows_with_a_name_and_a_reason(up):
     with pytest.raises(Exception, match="no reviewer name"):
         up.call("applyApprovals", rows, {"approve_U_1": "Approve: place it in the outbox"}, {"run_id": "r"})
     assert up.call("applyApprovals", rows, {"decided_by": "x", "approve_U_1": "Leave it as a draft for now"}, {"run_id": "r"}) == []
+
+
+# ---------------------------------------------------------------- R23: each figure is the fact it sits beside (test run n8n-8910)
+
+def f8910(fid, kind, value, says, unit=None):
+    return {"id": fid, "kind": kind, "unit": unit, "says": says, "value": value, "source": {"table": "forecasts"}}
+
+
+HEAD_OF_OPS = {"audience": "requester", "titles": [], "items": [
+    {"request_id": "CD-0107", "title": "Clean up duplicate Quote records"}, {"request_id": "CD-0120", "title": "Retire the old welcome-email workflow"}],
+    "facts": [f8910("L85", "percent", "0.85", "the forecast's 85% level"),
+              f8910("A1", "id", "CD-0107", "CD-0107: the request id"),
+              f8910("A2", "date", "2027-02-17", "CD-0107: done by this date in 50% of the forecast's runs"),
+              f8910("A3", "date", "2027-02-25", "CD-0107: done by this date in 85% of the forecast's runs"),
+              f8910("A4", "date", "2027-03-03", "CD-0107: done by this date in 95% of the forecast's runs"),
+              f8910("A5", "date", "2027-02-12", "CD-0107: its 85% date in the last forecast"),
+              f8910("B1", "id", "CD-0120", "CD-0120: the request id"),
+              f8910("B2", "date", "2027-02-19", "CD-0120: done by this date in 50% of the forecast's runs"),
+              f8910("B3", "date", "2027-03-03", "CD-0120: done by this date in 85% of the forecast's runs"),
+              f8910("B4", "date", "2027-03-05", "CD-0120: done by this date in 95% of the forecast's runs"),
+              f8910("B5", "date", "2027-02-17", "CD-0120: its 85% date in the last forecast")]}
+HEAD_OF_OPS_TEXT = ("CD-0107 Clean up duplicate Quote records: We expect it between 17 February 2027 and 3 March 2027, and 85% likely by "
+                    "25 February 2027. Our 85% date moved from 12 February 2027 to 25 February 2027. CD-0120 Retire the old welcome-email "
+                    "workflow: We expect it between 19 February 2027 and 5 March 2027, and 85% likely by 3 March 2027. Our 85% date moved "
+                    "from 17 February 2027 to 3 March 2027.")
+MANAGER = {"audience": "manager", "items": [], "titles": [], "facts": [
+    f8910("M1", "id", "CD-0119", "CD-0119 (Pipeline report does not match finance's total): moved"),
+    f8910("M2", "date", "2027-01-20", "CD-0119: its 85% date in the last forecast"),
+    f8910("M3", "date", "2027-01-28", "CD-0119: its 85% date now"),
+    f8910("M4", "id", "CD-0121", "CD-0121 (Try a meeting-scheduler app from the marketplace): moved"),
+    f8910("M5", "date", "2027-01-28", "CD-0121: its 85% date in the last forecast"),
+    f8910("M6", "date", "2027-02-05", "CD-0121: its 85% date now"),
+    f8910("H1", "number", "3.9", "fixed date lane: hours a week that arrive, in the forecast", "hours"),
+    f8910("H2", "number", "4.2", "fixed date lane: hours a week that are worked, in the forecast", "hours"),
+    f8910("H3", "number", "8.1", "small and quick lane: hours a week that arrive, in the forecast", "hours"),
+    f8910("H4", "number", "7.9", "small and quick lane: hours a week that are worked, in the forecast", "hours"),
+    f8910("W1", "date", "2026-11-23", "the Monday this week's plan starts"),
+    f8910("W2", "number", "36", "hours in this week's plan", "hours"),
+    f8910("P1", "number", "22", "this week's plan: hours for the fixed date lane", "hours"),
+    f8910("P2", "number", "8.1", "this week's plan: hours for the small and quick lane", "hours"),
+    f8910("P3", "number", "1.9", "this week's plan: hours for the standard lane", "hours"),
+    f8910("P4", "number", "4", "this week's plan: hours for the urgent lane", "hours")]}
+MANAGER_TEXT = ("Moved: CD-0119 from 20 January 2027 to 28 January 2027; CD-0121 from 28 January 2027 to 5 February 2027. "
+                "Hours in against hours worked a week: fixed date lane 3.9 hours in, 4.2 hours worked; small and quick lane 8.1 hours in, "
+                "7.9 hours worked, grows. This week's plan, starting 23 November 2026, has 36 hours: fixed date lane 22 hours, small and "
+                "quick lane 8.1 hours, standard lane 1.9 hours, urgent lane 4 hours.")
+
+
+def traced(figs, text, pack):
+    return [(f["text"], f["fact_id"]) for f in figs.call("traceFigures", text, pack)["figures"]]
+
+
+def test_r23_a_date_is_the_fact_of_the_request_it_sits_beside(figs):
+    """Run n8n-8910, the head of operations draft: CD-0120's "3 March 2027" and "17 February 2027" cited CD-0107's rows (its 95%
+    and its 50% dates hold the same values). Each now cites CD-0120's own."""
+    got = traced(figs, HEAD_OF_OPS_TEXT, HEAD_OF_OPS)
+    cd0107, cd0120 = got[:got.index(("CD-0120", "B1"))], got[got.index(("CD-0120", "B1")):]
+    assert ("3 March 2027", "A4") in cd0107 and ("17 February 2027", "A2") in cd0107
+    assert [x for x in cd0120 if x[0] in ("3 March 2027", "17 February 2027")] == [("3 March 2027", "B3"), ("17 February 2027", "B5"), ("3 March 2027", "B3")]
+
+
+def test_r23_a_figure_is_the_fact_its_sentence_names_and_an_exact_value_beats_a_rounded_one(figs):
+    """Run n8n-8910, the manager draft: CD-0121's "28 January 2027" cited CD-0119's row; the plan's "8.1" small-lane hours cited
+    the forecast's hours in; the plan's "4" urgent hours cited the fixed-date lane's 3.9 hours in. Each now cites its own row."""
+    got = traced(figs, MANAGER_TEXT, MANAGER)
+    assert [x for x in got if x[0] == "28 January 2027"] == [("28 January 2027", "M3"), ("28 January 2027", "M5")]
+    assert [x for x in got if x[0] == "8.1"] == [("8.1", "H3"), ("8.1", "P2")]
+    assert ("4", "P4") in got and ("3.9", "H1") in got and ("22", "P1") in got
+    assert all(fid for _, fid in got)
+
+
+def test_r23_a_figure_beside_one_request_that_only_another_requests_fact_holds_is_a_problem(up, figs):
+    wrong = HEAD_OF_OPS_TEXT.replace("from 17 February 2027 to 3 March 2027", "from 12 February 2027 to 3 March 2027")
+    t = figs.call("traceFigures", wrong, HEAD_OF_OPS)
+    assert [(f["text"], f["beside"]) for f in t["elsewhere"]] == [("12 February 2027", "CD-0120")]
+    pack = dict(HEAD_OF_OPS, update_id="U-t-req-head-of-operations", to_role="Head of operations", word_limit=200, forecast_run_id="fc-b", moved=[])
+    d = up.call("checkUpdateDraft", pack, reply(wrong), {"run_id": "t", "model": "m"})["draft"]
+    assert 'match only another request\'s facts: "12 February 2027" (beside CD-0120)' in d["draft_problems"]

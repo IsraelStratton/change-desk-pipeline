@@ -1,5 +1,5 @@
 {
- "made_at": "2026-11-25T00:36:29Z",
+ "made_at": "2026-11-25T01:14:40Z",
  "read_from": "changedesk.call_cost (the run log with the price table)",
  "by_step": [
   {
@@ -19,12 +19,12 @@
    "source": "eval",
    "model": "claude-haiku-5-5",
    "cases": "E",
-   "calls": 360,
+   "calls": 363,
    "failed": 2,
-   "cost_per_call_usd": 0.00087463,
-   "total_cost_usd": 0.314867,
-   "avg_input_tokens": 6903,
-   "avg_output_tokens": 369
+   "cost_per_call_usd": 0.00087455,
+   "total_cost_usd": 0.317463,
+   "avg_input_tokens": 6904,
+   "avg_output_tokens": 368
   },
   {
    "step": "triage",
@@ -67,12 +67,12 @@
    "source": "n8n",
    "model": "claude-haiku-5-5",
    "cases": "",
-   "calls": 1,
+   "calls": 4,
    "failed": 0,
-   "cost_per_call_usd": 0.0001768,
-   "total_cost_usd": 0.000177,
-   "avg_input_tokens": 898,
-   "avg_output_tokens": 174
+   "cost_per_call_usd": 0.0001685,
+   "total_cost_usd": 0.000674,
+   "avg_input_tokens": 851,
+   "avg_output_tokens": 167
   },
   {
    "step": "drafter",
@@ -138,7 +138,7 @@
   }
  ],
  "totals": {
-  "calls": 504,
-  "total": 0.4302898
+  "calls": 510,
+  "total": 0.4333835
  }
 }

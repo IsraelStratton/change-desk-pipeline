@@ -11,9 +11,14 @@ message from the decide list is checked the same way, against its record's facts
   python scripts/check_updates.py                       # every draft waiting for approval
   python scripts/check_updates.py --run up-20261125T001500Z
   python scripts/check_updates.py --update U-up-20261125T001500Z-manager
-  python scripts/check_updates.py --all --write         # every update; write docs/reports/updates.md
+  python scripts/check_updates.py --outbox --write      # every approved update; write docs/reports/updates.md
+  python scripts/check_updates.py --all                 # every update, rejected ones too
 
-Exit codes: 0 every figure found its row, 1 a figure has no source or its row now differs, 2 could not run.
+A draft must match the pipe now. An update already approved or rejected was checked when it was decided (the store
+refuses to approve a draft whose facts no longer match their rows), so a row that has changed since is shown, not failed.
+
+Exit codes: 0 every figure found its row, 1 a figure has no source, sits beside another request, or (in a draft) its row
+now differs, 2 could not run.
 """
 from __future__ import annotations
 
@@ -71,6 +76,7 @@ def check_one(conn, u: dict, figures_eng: Engine, updates_eng: Engine, drafter: 
     text = f"{u['subject']}\n{u['body']}"
     traced = figures_eng.call("traceFigures", text, pack)
     facts = {f["id"]: f for f in pack["facts"]}
+    decided = u["status"] != "draft"
     rows, fails = [], []
     for fig in traced["figures"]:
         if fig["kind"] == "number_word":
@@ -82,10 +88,18 @@ def check_one(conn, u: dict, figures_eng: Engine, updates_eng: Engine, drafter: 
             rows.append({"figure": fig["text"], "fact": "", "source": "no fact in the pack has this value", "drafted": "", "now": "", "ok": False})
             fails.append(f'"{fig["text"]}" has no source')
             continue
+        if fig.get("beside"):
+            rows.append({"figure": fig["text"], "fact": fact["says"], "source": source_words(fact["source"]), "drafted": fact["value"],
+                         "now": "", "ok": False})
+            fails.append(f'"{fig["text"]}" sits beside {fig["beside"]} but matches only another request\'s fact')
+            continue
         now, err = now_value(conn, fact["source"])
-        ok = err is None and now == fact["value"]
+        same = err is None and now == fact["value"]
+        # A draft must match the pipe now. An update already decided was checked when it was decided (approve_updates refuses a
+        # stale draft): a row that has changed since is shown, not failed.
+        ok = same or decided
         rows.append({"figure": fig["text"], "fact": fact["says"], "source": source_words(fact["source"]), "drafted": fact["value"],
-                     "now": err or now, "ok": ok})
+                     "now": err or now, "ok": ok, "changed": not same})
         if not ok:
             fails.append(f'"{fig["text"]}": its row now gives {err or now}, the draft used {fact["value"]}')
     cover = updates_eng.call("coverage", pack, u["body"]) if u["audience"] == "requester" and u["kind"] == "status" else []
@@ -123,7 +137,8 @@ def report(results: list[dict], title: str) -> str:
             lines += ["", f"The drafter's code check found problems, so it can only be rejected: {u['draft_problems']}."]
         lines += ["", "| Figure | Fact | Source row | Drafted | Now | |", "|---|---|---|---|---|---|"]
         for x in r["rows"]:
-            lines.append(f"| {x['figure']} | {x['fact']} | {x['source']} | {x['drafted']} | {x['now']} | {'ok' if x['ok'] else '**no**'} |")
+            mark = "**no**" if not x["ok"] else ("ok (the row changed after the decision)" if x.get("changed") else "ok")
+            lines.append(f"| {x['figure']} | {x['fact']} | {x['source']} | {x['drafted']} | {x['now']} | {mark} |")
         if r["coverage"]:
             lines += ["", "Every open item answered (R25):", "", "| Item | Answer | Answered |", "|---|---|---|"]
             for c in r["coverage"]:
@@ -140,6 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--run", help="every update one drafting run made (its run id)")
     ap.add_argument("--update", help="one update id")
     ap.add_argument("--all", action="store_true", help="every update in the store")
+    ap.add_argument("--outbox", action="store_true", help="every update a person approved into the outbox")
     ap.add_argument("--write", action="store_true", help="write docs/reports/updates.md")
     args = ap.parse_args(argv)
     try:
@@ -149,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
                 rows, title = desk_db.rows(conn, SELECT + " where u.update_id = %s", (args.update,)), args.update
             elif args.run:
                 rows, title = desk_db.rows(conn, SELECT + " where u.run_id = %s order by u.audience desc, u.update_id", (args.run,)), f"run {args.run}"
+            elif args.outbox:
+                rows, title = desk_db.rows(conn, SELECT + " join changedesk.outbox o on o.update_id = u.update_id order by o.placed_at, u.update_id"), \
+                    "the updates in the outbox"
             elif args.all:
                 rows, title = desk_db.rows(conn, SELECT + " order by u.drafted_at, u.update_id"), "every update"
             else:
