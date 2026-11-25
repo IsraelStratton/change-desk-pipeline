@@ -64,7 +64,10 @@ def report(rows: list[dict], decide: list[dict], fixed: list[dict], plan: list[d
     flags = growth_flags(rows, weeks_needed, as_of)
     lines = [f"# Pipe health, as of {as_of:%d/%m/%Y}", "",
              "Made by `scripts/health_report.py` from the view `changedesk.lane_health` (R15), the decide list (R16) and the lane growth "
-             f"flag (R17). Counts are items; a week runs Monday to Sunday. Every ticket is made up.", ""]
+             f"flag (R17). Counts are items; a week runs Monday to Sunday. Every ticket is made up.", "",
+             f"Made at the settings in the store on {as_of:%d/%m/%Y}: **{float(settings['hours_per_week']):g} hours a week**, small and quick "
+             f"{float(settings['small_share']) * 100:g}%, standard {float(settings['standard_share']) * 100:g}%. Each past week's urgent hours beyond "
+             "the buffer use the buffer of that week (changedesk.setting_num_at): 4 hours at 40 hours a week, 3.6 at 36.", ""]
     if last:
         lw = date.fromisoformat(last)
         lines += [f"## Each lane in the last complete week ({lw:%d/%m} to {lw + timedelta(days=6):%d/%m/%Y})", "",
@@ -98,12 +101,18 @@ def report(rows: list[dict], decide: list[dict], fixed: list[dict], plan: list[d
     totals = {lane: sum(int(r["arrived"]) for r in rows if r["lane"] == lane and str(r["week_start"])[:10] in complete) for lane in P.LANES}
     outs = {lane: sum(int(r["finished"]) for r in rows if r["lane"] == lane and str(r["week_start"])[:10] in complete) for lane in P.LANES}
     lines += [f"Over all {len(complete)} complete weeks: " + "; ".join(f"{P.LANE_WORDS[lane]} {totals[lane]} in, {outs[lane]} out" for lane in P.LANES) + ".", ""]
-    lines += [f"## The decide list (R16): {len(decide)} items past their lane's age limit", ""]
+    passed = [d for d in decide if d.get("why") == "its fixed date has passed"]
+    lines += [f"## The decide list (R16): {len(decide)} items, {len(decide) - len(passed)} past their lane's age limit and "
+              f"{len(passed)} past their fixed date", ""]
     if decide:
-        lines += ["| Item | Lane | Age (days) | Limit | Days over |", "|---|---|---|---|---|"]
+        lines += ["| Item | Lane | Why it is here | Age (days) | Limit | Days over |", "|---|---|---|---|---|---|"]
         for d in decide:
-            lines.append(f"| {d['request_id']} {d['title']} | {P.LANE_WORDS[d['lane']]} | {d['age_days']} | {d['age_limit_days']} | {d['days_over']} |")
-        lines += ["", "Each is decided on the n8n decide form: do it next, merge it, or close it with a reason.", ""]
+            limit = d["age_limit_days"] if d["age_limit_days"] is not None else f"due {d['due_date']:%d/%m/%Y}" if hasattr(d["due_date"], "strftime") \
+                else f"due {date.fromisoformat(str(d['due_date'])):%d/%m/%Y}"
+            lines.append(f"| {d['request_id']} {d['title']} | {P.LANE_WORDS[d['lane']]} | {d['why']} | {d['age_days']} | {limit} | {d['days_over']} |")
+        lines += ["", "Each is decided on the n8n decide form: do it next, merge it, or close it with a reason. A fixed-date item whose date "
+                  "has passed is listed at once, whatever its age (a build addition to R16, Israel's decision of 25/11/2026): "
+                  "a person says whether it is still needed.", ""]
     lines += ["## Fixed dates still open", ""]
     if fixed:
         lines += ["| Item | Due | Latest safe start | |", "|---|---|---|---|"]

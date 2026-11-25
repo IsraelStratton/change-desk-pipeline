@@ -1,4 +1,4 @@
-# Build guide: stages 0 to 4
+# Build guide: stages 0 to 6
 
 Who does what. The Code chat does every step it can from the command line. Israel does only what needs him: keys and passwords. COURSES 2ND does the clicks in Israel's Chrome. Neither chat sees a key or a password.
 
@@ -43,7 +43,7 @@ Save. It shows "Connection tested successfully" when the password is right. This
 
 The Claude credential is reused, not made again: **Claude key gtm-pipeline-v2** (Header Auth) already holds the same key, and its reach fits this build.
 
-## Part C. Put the workflows in (Code chat; done 25/11/2026, all five off)
+## Part C. Put the workflows in (Code chat; done 25/11/2026, all six off)
 
 ```bash
 .venv/bin/python scripts/n8n_publish.py publish
@@ -96,3 +96,36 @@ A setting is changed only through the store, with who and why, and the next plan
 ```bash
 docker exec -i supabase_db_hubspot-ai-database psql -U postgres -d postgres -c "select changedesk.set_setting('small_share', '0.25'::jsonb, 'Israel', 'the small lane needs more than its demand');"
 ```
+
+## Part G. Stage 5: the updates, the approval form and the outbox (Code chat; done 25/11/2026)
+
+No new credential: the approval form uses "Change Desk (Postgres)", the app's own login. The update drafter runs from Python with the Claude key in `.env`. A forecast run starts it when an 85% date moves by more than a week:
+
+```bash
+.venv/bin/python scripts/forecast.py                         # saves the run; if the trigger fires, drafts the updates
+.venv/bin/python scripts/draft_updates.py --run <run id>     # draft again for a saved run (one draft per reader)
+.venv/bin/python scripts/draft_updates.py --dry-run          # print the packs of facts; call nothing; keep nothing
+.venv/bin/python scripts/check_updates.py --write            # the source row of every figure in every draft: docs/reports/updates.md
+.venv/bin/python scripts/n8n_publish.py publish              # the six workflows, the approval form among them; all off
+```
+
+The approval form is at http://localhost:5678/form/changedesk-approve-updates while its workflow is on. An approved update goes to `changedesk.outbox`, and nothing reads the outbox to send it.
+
+## Part H. The stage 5 test run (COURSES 2ND, on Israel's delegation)
+
+COURSES 2ND cannot run the scripts. It switches the workflows on in the n8n screens (Publish), uses the forms, and switches them off again (Unpublish). `scripts/n8n_publish.py check` accepts a workflow switched on and off there and left off. **The order matters.** Closing the three missed dates changes facts that three drafts were drafted from, and the store refuses an approval of a draft whose facts no longer match the pipe. So approve first, then decide, then approve the close messages.
+
+1. **Approve updates** (switch on "Change Desk: approve updates"). Reviewer label `courses-2nd (delegated)`. Approve the six run-4 drafts that offer "Approve" (`U-up-20261125T003014Z-...`: four requesters, the manager, the executive). Reject the account executive's draft, which the drafter flagged ("Reject: it failed the checks"), and the old CD-0029 close message (`U-n8n-8909-CD-0029`, the same). The last page says how many went to the outbox.
+2. **Decide list** (switch on "Change Desk: decide list"). Reviewer `courses-2nd (delegated)`. Choose "Close: overtaken by another change" for CD-0046, CD-0060 and CD-0089, and leave the four others on the list. Each close drafts a message to its requester.
+3. **Approve updates** again. Approve the three new close messages if they pass their checks; reject any the checks flagged.
+4. Switch every workflow off (Unpublish).
+
+What the Code chat checks afterwards: the outbox holds one row for each approval, each with its approval decision and the reviewer's name; nothing was sent; the three missed dates are Closed with the reason "Overtaken by another change."; their close drafts' figures trace to their rows (`scripts/check_updates.py --all`); `scripts/n8n_publish.py check` finds all six in step and off. Then the forecast is run again: the closes move no 85% date by more than 7 days (a probe found at most 7), so nothing more is drafted.
+
+## Part I. The demo reset
+
+```bash
+.venv/bin/python scripts/load_history.py --reset
+```
+
+It puts back the made-up history and every starting setting from `settings/settings.json` (40 hours a week, the 20/70 split), each as a change in the settings table by `load_history.py --reset`. It clears the plans, forecasts, triggers, drafts, decisions, the outbox (by TRUNCATE, as the owner: the outbox's own trigger refuses delete) and the run log. The cost sheet keeps its figures in `docs/cost-sheet.json`. After a reset, run triage, the plan and the forecast again before a demo.

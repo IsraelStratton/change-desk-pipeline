@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Put the Change Desk's workflows into the local n8n through its API, check the live copies, and switch them on or off.
 
-Copied from the GTM pipeline (scripts/n8n_publish_routing.py) and shaped for this build's five workflows.
+Copied from the GTM pipeline (scripts/n8n_publish_routing.py) and shaped for this build's six workflows.
 
-  python scripts/n8n_publish.py publish           # create or update all five; they stay OFF
+  python scripts/n8n_publish.py publish           # create or update all six; they stay OFF
   python scripts/n8n_publish.py check             # compare the live copies with the files; change nothing
-  python scripts/n8n_publish.py on                # switch all five on, for a test session (forms answer)
-  python scripts/n8n_publish.py off               # switch all five off again
+  python scripts/n8n_publish.py on                # switch all six on, for a test session (forms answer)
+  python scripts/n8n_publish.py off               # switch all six off again
   python scripts/n8n_publish.py on --target intake
 
 What publish does, so nothing is clicked by hand and nothing drifts:
@@ -22,7 +22,9 @@ sets and n8n does not hold is taken as that default; every value n8n does hold m
 every Code node's JavaScript must match in full. n8n 2.x runs a workflow's published version, not its
 saved draft, so check also reads the published version when there is one: an active workflow's must be
 its latest saved version and match the file, and an inactive one must have none (Publish and Unpublish
-in the n8n screens save a named version; that alone is no difference).
+in the n8n screens save a named version; that alone is no difference). COURSES 2ND switches the workflows
+on and off in the n8n screens and cannot run this script: a workflow switched on and off there, and left off,
+is in step (tests/test_n8n_publish.py walks all six through that cycle). One left on is reported with a note.
 
 No workflow has a schedule. A form only answers while its workflow is on; turn them off after a session.
 The n8n API key is read from .env (N8N_API_KEY) and never printed.
@@ -209,6 +211,9 @@ def main(argv: list[str] | None = None) -> int:
                 ok = ok and not diff
                 print(f"{'In step' if not diff else 'Out of step'}: '{t['name']}' {'matches' if not diff else 'does not match'} "
                       f"n8n/{t['file']}; {'on' if live.get('active') else 'off'}.")
+                if live.get("active"):
+                    print(f"NOTE '{t['name']}' is on: its form answers. Switch it off when the test session ends "
+                          "(Unpublish in the n8n screens, or python scripts/n8n_publish.py off).")
             else:
                 if live is None:
                     print(f"NOT IN N8N '{t['name']}': run publish first")

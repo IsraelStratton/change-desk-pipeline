@@ -15,7 +15,8 @@ var escapeHtml = C.escapeHtml;
 var isoSeconds = C.isoSeconds;
 // ---------------------------------------------------------------- end of imports
 
-const SCORING_ENGINE_VERSION = '1.0.1'; // 1.0.1 (25/11/2026): a decided item's reason is its own; the reviewer's note stays on the decision
+const SCORING_ENGINE_VERSION = '1.0.2'; // 1.0.2 (25/11/2026): a fixed-date item whose date has passed is on the list too, and the form says why
+// 1.0.1 (25/11/2026): a decided item's reason is its own; the reviewer's note stays on the decision
 const SCORE_PARTS = ['value', 'effort', 'risk', 'goal_fit', 'readiness'];
 const PART_WORDS = { value: 'value', effort: 'effort', risk: 'risk', goal_fit: 'goal fit', readiness: 'readiness' };
 const LEAVE = 'Leave on the list for now';
@@ -156,22 +157,34 @@ function decideKey(requestId) {
   return `decide_${String(requestId).replace(/[^A-Za-z0-9]/g, '_')}`;
 }
 
+// Build addition to R16 (25/11/2026): a fixed-date item whose date has passed is on the list at once.
+function datePassed(row) {
+  return row.lane === 'fixed_date' && row.why === 'its fixed date has passed';
+}
+
+function decideWhy(row) {
+  if (datePassed(row)) return `due ${String(row.due_date || '').slice(0, 10)}: its date passed ${row.days_over} days ago (asked ${row.age_days} days ago)`;
+  return `${row.age_days} days (limit ${row.age_limit_days}, ${row.days_over} over)`;
+}
+
 function buildDecideForm(list, open, meta) {
   const m = meta || {};
   if (!(list || []).length) throw new Error('decide form: nothing is past its age limit');
   const rows = list.map((r) => '<tr>'
     + `<td><b>${escapeHtml(r.request_id)}</b><br>${escapeHtml(r.requester_role)}</td><td>${escapeHtml(r.title)}</td>`
-    + `<td>${escapeHtml(r.lane)}</td><td>${escapeHtml(r.age_days)} days (limit ${escapeHtml(r.age_limit_days)}, ${escapeHtml(r.days_over)} over)</td>`
+    + `<td>${escapeHtml(r.lane)}</td><td>${escapeHtml(decideWhy(r))}</td>`
     + `<td>${escapeHtml(r.score === null || r.score === undefined ? '' : r.score)}</td></tr>`).join('');
-  const html = `<p><b>${list.length} items are past their lane's age limit.</b> Decide each one: do it next, merge it, or close it with a reason. `
-    + 'Nothing is left to rot. A close drafts a message to the requester for a person to approve: nothing is sent.</p>'
-    + `<table><tr><th>Item</th><th>Title</th><th>Lane</th><th>Age</th><th>Score</th></tr>${rows}</table>`;
+  const passed = list.filter(datePassed).length;
+  const html = `<p><b>${list.length} items to decide: ${list.length - passed} past their lane's age limit, ${passed} past their fixed date.</b> `
+    + 'Decide each one: do it next, merge it, or close it with a reason. Nothing is left to rot. A fixed-date item whose date has passed is listed '
+    + 'at once, whatever its age: say whether it is still needed. A close drafts a message to the requester for a person to approve: nothing is sent.</p>'
+    + `<table><tr><th>Item</th><th>Title</th><th>Lane</th><th>Why it is here</th><th>Score</th></tr>${rows}</table>`;
   const fields = [
     { fieldType: 'html', html: m.run_id ? `<p>Run ${escapeHtml(m.run_id)}.</p>${html}` : html },
     { fieldLabel: 'Your name or reviewer label', fieldName: 'decided_by', fieldType: 'text', requiredField: true, placeholder: 'e.g. desk-lead' },
   ];
   for (const r of list) {
-    fields.push({ fieldLabel: `${r.request_id} ${scoreClip(r.title, 60)} (${r.age_days} days)`, fieldName: decideKey(r.request_id),
+    fields.push({ fieldLabel: `${r.request_id} ${scoreClip(r.title, 60)} (${datePassed(r) ? `its date passed ${r.days_over} days ago` : `${r.age_days} days`})`, fieldName: decideKey(r.request_id),
       fieldType: 'dropdown', requiredField: true, fieldOptions: { values: decideOptions(r, open).map((o) => ({ option: o })) } });
   }
   fields.push({ fieldLabel: 'A note for the record (kept with your decisions, never put on an item or in a message; optional)',
@@ -227,5 +240,6 @@ function applyDecideChoices(list, open, form, meta) {
 const SCORING = {
   SCORING_ENGINE_VERSION, SCORE_PARTS, PART_WORDS, CLOSE_REASONS, LEAVE, DO_NEXT, sizeEffortPoints, scoreWithWorking, rankPoints,
   buildScoreForm, applyScoreChange, mergeChoices, decideOptions, decideKey, buildDecideForm, ownReason, applyDecideChoices, itemLabel,
+  datePassed, decideWhy,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = SCORING;

@@ -40,9 +40,10 @@ PASSWORD_KEY = "CHANGEDESK_DB_PASSWORD"
 WRITE_FUNCTIONS = [
     "add_request(jsonb)", "log_triage(jsonb, jsonb, jsonb)", "confirm_lanes(jsonb)", "change_score(jsonb)",
     "decide(jsonb)", "log_drafts(jsonb, jsonb, jsonb)", "set_setting(text, jsonb, text, text)",
-    "save_plan(jsonb)", "log_forecast(jsonb, jsonb, jsonb)",
+    "save_plan(jsonb)", "log_forecast(jsonb, jsonb, jsonb)", "log_updates(jsonb, jsonb, jsonb, jsonb)", "approve_updates(jsonb)",
 ]
-READ_FUNCTIONS = ["setting(text)", "setting_num(text)", "effort_points(numeric)", "ranked_standard(date)", "decide_list_at(date)"]
+READ_FUNCTIONS = ["setting(text)", "setting_num(text)", "effort_points(numeric)", "ranked_standard(date)", "decide_list_at(date)",
+                  "fact_value(jsonb)", "stale_facts(text)", "setting_num_at(text, date)"]
 
 
 def db_settings() -> dict[str, str]:
@@ -204,6 +205,8 @@ def check_limits(settings: dict[str, str], password: str) -> list[tuple[str, boo
         denied("cannot change a setting directly", "update changedesk.settings set value = '1'::jsonb")
         denied("cannot insert into the run log directly", "insert into changedesk.run_log (call_id) values ('x')")
         denied("cannot create a table in changedesk", "create table changedesk.probe (x int)")
+        denied("cannot put a row in the outbox directly (R24)", "insert into changedesk.outbox (outbox_id) values ('x')")
+        denied("cannot approve an update directly (R24)", "update changedesk.updates set status = 'approved', approved_by = 'x'")
         # pg_tables lists every table whatever the login may read (information_schema would hide them).
         for schema in ("gtm_v2", "ec", "public"):
             other = conn.execute(

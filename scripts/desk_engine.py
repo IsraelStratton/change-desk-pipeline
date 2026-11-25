@@ -34,7 +34,7 @@ class Ref(dict):
 
 
 class Engine:
-    """module: "triage", "scoring", "drafter" or "common"."""
+    """module: "triage", "scoring", "drafter", "updates" or "common"."""
 
     def __init__(self, module: str = "triage", node: str | None = None):
         self.node = node or shutil.which("node")

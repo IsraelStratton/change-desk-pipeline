@@ -45,6 +45,22 @@ create table if not exists changedesk.run_log (
   check (output_valid or error is not null or stop_reason is not null)
 );
 create index if not exists run_log_run_idx on changedesk.run_log (run_id);
+
+-- Stage 5 (25/11/2026): the update drafter's calls. Its calls name the update they drafted (update_id); an update
+-- for the manager or the executive covers no single request, so its call and its hand-off carry no request_id.
+alter table changedesk.run_log add column if not exists update_id text;
+alter table changedesk.run_log drop constraint if exists run_log_step_check;
+alter table changedesk.run_log add constraint run_log_step_check check (step in ('triage', 'drafter', 'updater'));
+alter table changedesk.run_log drop constraint if exists run_log_check;
+alter table changedesk.run_log add constraint run_log_check check (source = 'eval' or request_id is not null or (step = 'updater' and update_id is not null));
+-- call_cost reads l.*, so it is made again once with the new column (with the views that read it).
+do $$
+begin
+  if exists (select 1 from information_schema.views where table_schema = 'changedesk' and table_name = 'call_cost')
+     and not exists (select 1 from information_schema.columns where table_schema = 'changedesk' and table_name = 'call_cost' and column_name = 'update_id') then
+    drop view changedesk.call_cost cascade;
+  end if;
+end $$;
 create index if not exists run_log_request_idx on changedesk.run_log (request_id);
 
 -- KB-137 B3: each hand-off is a record. Here the AI step hands an item to a person when the lane
@@ -64,6 +80,9 @@ create table if not exists changedesk.agent_handoffs (
   check (from_agent <> to_agent)
 );
 create index if not exists agent_handoffs_run_idx on changedesk.agent_handoffs (run_id);
+alter table changedesk.agent_handoffs alter column request_id drop not null;
+alter table changedesk.agent_handoffs drop constraint if exists agent_handoffs_request_needed;
+alter table changedesk.agent_handoffs add constraint agent_handoffs_request_needed check (request_id is not null or from_agent = 'update_drafter');
 
 -- One row per AI call, with its cost from the price table (the long-prompt price applies per call).
 create or replace view changedesk.call_cost as
@@ -103,3 +122,4 @@ select step, source, model, count(*) as calls,
   round(avg(input_tokens)) as avg_input_tokens, round(avg(output_tokens)) as avg_output_tokens
 from changedesk.call_cost
 group by step, source, model;
+

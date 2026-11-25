@@ -176,3 +176,48 @@ def test_the_playbook_built_into_every_workflow_equals_skill_md():
             if "playbook: { name: '" in js:
                 assert f"version: '{version}'" in js, f"{FILES[key]} {n['name']}"
     assert found == 2  # Build Requests and Check Triage in the triage workflow
+
+
+# ---------------------------------------------------------------- stage 5: the approval form, and nothing that sends
+
+SEND_TYPES = ("email", "gmail", "smtp", "outlook", "mail", "slack", "telegram", "twilio", "discord", "teams", "sendgrid", "mailgun", "whatsapp")
+
+
+def test_r24_no_workflow_has_a_node_that_sends():
+    """An approved update goes to the outbox table and nowhere else: no workflow has a node that can send a message, and the
+    only HTTP request in any workflow is the Claude API."""
+    for key in FILES:
+        for n in wf(key)["nodes"]:
+            assert not any(s in n["type"].lower() for s in SEND_TYPES), (key, n["name"], n["type"])
+            if n["type"] == "n8n-nodes-base.httpRequest":
+                assert n["parameters"]["url"] == "https://api.anthropic.com/v1/messages", (key, n["name"])
+
+
+def test_r24_only_the_approval_form_calls_approve_updates_and_no_workflow_writes_the_outbox():
+    for key in FILES:
+        for n in wf(key)["nodes"]:
+            q = (n.get("parameters") or {}).get("query") or ""
+            assert ("approve_updates" in q) == (key == "approve" and n["name"] == "Approve Updates"), (key, n["name"])
+            assert "outbox" not in q.lower() or key == "approve", (key, n["name"])
+
+
+def test_r24_the_approval_form_builds_from_the_drafts_and_records_the_choices():
+    drafts = [{"json": {"update_id": "U-up-1-manager", "audience": "manager", "kind": "status", "to_role": "Desk manager", "request_id": None,
+                        "subject": "Pipe update", "body": "The standard lane takes in 30.8 hours a week.", "draft_problems": "",
+                        "facts": [{"id": "F1", "kind": "number", "unit": "hours", "says": "standard lane: hours a week that arrive", "value": "30.8",
+                                   "source": {"table": "forecasts", "where": {"run_id": "fc-b", "lane": "standard", "request_id": None},
+                                              "column": "hours_in_per_week"}}],
+                        "figures": [{"text": "30.8", "kind": "number", "fact_id": "F1"}], "stale": []}},
+              {"json": {"update_id": "U-n8n-8909-CD-0029", "audience": "requester", "kind": "close", "to_role": "Support lead", "request_id": "CD-0029",
+                        "subject": "Closed", "body": "b", "draft_problems": "it makes a promise", "facts": [], "figures": [], "stale": []}}]
+    built = run_node(FILES["approve"], "Build Form", drafts)
+    html = built[0]["json"]["form_fields"][0]["html"]
+    assert built[0]["json"]["count"] == 2 and "1 can be approved" in html
+    assert "hours_in_per_week" in html and "30.8" in html, "each figure is shown with the row it comes from"
+    applied = run_node(FILES["approve"], "Apply Choices", [{"json": {"decided_by": "desk-lead", "approve_U_up_1_manager": "Approve: place it in the outbox",
+                                                                     "approve_U_n8n_8909_CD_0029": "Reject: it failed the checks"}}],
+                       {"Build Form": built})[0]["json"]
+    assert [(r["update_id"], r["action"]) for r in applied["rows"]] == [("U-up-1-manager", "approved"), ("U-n8n-8909-CD-0029", "rejected")]
+    done = run_node(FILES["approve"], "Done Message", [{"json": {"result": {"approved": ["U-up-1-manager"], "rejected": ["U-n8n-8909-CD-0029"]}}}],
+                    {"Apply Choices": [{"json": applied}]})[0]["json"]
+    assert "1 approved and placed in the outbox, 1 rejected" in done["message"] and "Nothing was sent" in done["message"]

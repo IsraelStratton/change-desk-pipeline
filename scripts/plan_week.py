@@ -58,9 +58,9 @@ def report(plan: P.WeekPlan, st: desk_state.DeskState, ps: P.PlanSettings, plan_
         "| Setting | Value |",
         "|---|---|",
         f"| Hours of work a week | {ps.hours_per_week:g} |",
-        f"| Urgent buffer | {ps.urgent_buffer_share:.0%} ({ps.hours_per_week * ps.urgent_buffer_share:g} hours) |",
-        f"| Small and quick share | {ps.small_share:.0%} ({ps.hours_per_week * ps.small_share:g} hours) |",
-        f"| Standard share | {ps.standard_share:.0%} ({ps.hours_per_week * ps.standard_share:g} hours) |",
+        f"| Urgent buffer | {ps.urgent_buffer_share * 100:g}% ({ps.hours_per_week * ps.urgent_buffer_share:g} hours) |",
+        f"| Small and quick share | {ps.small_share * 100:g}% ({ps.hours_per_week * ps.small_share:g} hours) |",
+        f"| Standard share | {ps.standard_share * 100:g}% ({ps.hours_per_week * ps.standard_share:g} hours) |",
         f"| Points for each week waited | {ps.age_points_per_week:g} |",
         f"| Latest safe start | the due date less {ps.safe_start_days} days: the time fixed-date work has needed "
         f"{float(s['latest_safe_start_percentile']):.0%} of the time ({len(st.spans)} done items in the work log, spans {st.spans or 'none'} days) |",
@@ -92,7 +92,7 @@ def report(plan: P.WeekPlan, st: desk_state.DeskState, ps: P.PlanSettings, plan_
                   f"{len(passed)} fixed-date items are past their date and still open "
                   f"({', '.join(f'{i.request_id} due {i.due:%d/%m/%Y}' for i in passed)}). "
                   "They were missed under the old rule, before the lanes. Past their latest safe start, the rule plans them "
-                  "at once. A person may decide they are no longer needed; the decide list covers only the small and standard lanes."]
+                  "at once. They are on the decide list (a build addition to R16, 25/11/2026): a person says whether each is still needed."]
     return "\n".join(lines) + "\n"
 
 

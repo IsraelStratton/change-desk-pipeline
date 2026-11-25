@@ -13,6 +13,8 @@ that meets every line is kept: Haiku 5.5 first, Sonnet 5.5 only where Haiku fall
   python scripts/triage_eval.py eval --rounds 1 --only E-33,E-34
   python scripts/triage_eval.py eval --log --save                      # also the run log and the results files
   python scripts/triage_eval.py eval --models claude-haiku-5-5,claude-sonnet-5-5 --log --save
+  python scripts/triage_eval.py eval --cases skills/triage-playbook/eval/fresh-cases.json --log --save --results results-fresh
+                                                                       # stage 6: the fresh set, once, the playbook unchanged
 
 A hostile request is blocked when it is flagged possible_injection (by the code screen or the model),
 it waits for a person, and its lane is the label's: the instruction it carries changed nothing.
@@ -127,7 +129,8 @@ def pct(v) -> str:
 
 def results_markdown(out: dict) -> str:
     lines = [f"# Triage eval results: {out['playbook']['name']} {out['playbook']['version']}", "",
-             f"Run {out['run_id']}, {out['ran_at']}. {out['cases']} labelled requests ({out['hostile_cases']} hostile), "
+             f"Run {out['run_id']}, {out['ran_at']}. {out['cases']} labelled requests ({out['hostile_cases']} hostile)"
+             f"{' from ' + out['cases_path'] if out.get('cases_path', REL['cases']) != REL['cases'] else ''}, "
              f"{out['rounds']} rounds per model, eval date {out['today']}. The bar was set before the first run (bar.json).", "",
              "| Line | Bar | " + " | ".join(out["summaries"]) + " |", "|---|---|" + "---|" * len(out["summaries"])]
     bar = out["bar"]["lines"]
@@ -167,7 +170,8 @@ def run_eval(args) -> int:
 
     playbook_path = Path(args.playbook).resolve() if args.playbook else PLAYBOOK
     text = playbook_path.read_text(encoding="utf-8")
-    cases_text = CASES.read_text(encoding="utf-8")
+    cases_path = Path(args.cases).resolve() if args.cases else CASES
+    cases_text = cases_path.read_text(encoding="utf-8")
     bar_text = BAR.read_text(encoding="utf-8")
     cases_doc, bar = json.loads(cases_text), json.loads(bar_text)
     prices = json.loads(PRICES.read_text(encoding="utf-8"))
@@ -212,7 +216,7 @@ def run_eval(args) -> int:
         "run_id": f"eval-{stamp}", "ran_at": now_iso(), "today": today, "rounds": rounds, "cases": len(cases),
         "hostile_cases": sum(1 for c in cases if c["label"]["hostile"]),
         "playbook": {"name": pb["name"], "version": pb["version"], "sha256": sha256(text), "path": str(playbook_path.relative_to(REPO))},
-        "cases_sha256": sha256(cases_text), "bar_sha256": sha256(bar_text), "bar": bar, "engine_version": rows[0]["call"]["engine_version"] if rows else None,
+        "cases_path": str(cases_path.relative_to(REPO)), "cases_sha256": sha256(cases_text), "bar_sha256": sha256(bar_text), "bar": bar, "engine_version": rows[0]["call"]["engine_version"] if rows else None,
         "summaries": summaries, "kept_model": kept_model(summaries, prices) if not args.only else None,
         "rows": [{k: v for k, v in r.items() if k != "call"} for r in rows],
     }
@@ -250,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--log", action="store_true", help="log every call to changedesk.run_log")
     e.add_argument("--save", action="store_true", help="write the results files next to the cases")
     e.add_argument("--playbook", help="a candidate playbook file to test instead of the live one")
+    e.add_argument("--cases", help="a labelled set to grade instead of cases.json (stage 6: eval/fresh-cases.json)")
     e.add_argument("--results", default="results", help="the results file name, without the extension")
     args = ap.parse_args(argv)
     try:

@@ -48,3 +48,23 @@ def test_a_published_version_that_differs_from_the_file_is_reported():
 
 def test_on_with_no_published_version_is_reported():
     assert pub.published_problems(live(True, None), None, WANTED) == ["it is on but n8n reports no published version"]
+
+
+def test_every_workflow_switched_on_and_off_in_the_n8n_screens_and_left_off_is_in_step():
+    """COURSES 2ND cannot run scripts: it uses Publish and Unpublish in the n8n screens, which save a named version each
+    time, and leaves the workflows off. For every one of the six, as n8n reports it after each step: in step throughout."""
+    import pytest
+
+    for key in build_n8n.TARGETS:
+        wanted = build_n8n.build(key)
+        base = {"name": wanted["name"], "nodes": wanted["nodes"], "connections": wanted["connections"],
+                "settings": {"executionOrder": "v1", "callerPolicy": "workflowsFromSameOwner"}}
+        put_in = dict(base, active=False, activeVersionId=None, versionId="v1")            # scripts/n8n_publish.py publish
+        published = dict(base, active=True, activeVersionId="v2", versionId="v2")          # Publish in the screens: a named version v2
+        unpublished = dict(base, active=False, activeVersionId=None, versionId="v3")       # Unpublish: another named version, nothing published
+        v2 = {"versionId": "v2", "nodes": wanted["nodes"], "connections": wanted["connections"]}
+        for live, version in ((put_in, None), (published, v2), (unpublished, None)):
+            assert pub.differences(live, wanted) == [], key
+            assert pub.published_problems(live, version, wanted) == [], (key, live["versionId"])
+        with pytest.raises(AssertionError):  # and the check still sees a workflow left published after it was switched off
+            assert pub.published_problems(dict(unpublished, activeVersionId="v2"), v2, wanted) == []

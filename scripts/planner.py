@@ -263,7 +263,7 @@ def plan_week(items: list[Item], week_start: date, ps: PlanSettings, rule: str =
     small_budget = ps.hours_per_week * ps.small_share
     small_q = small_order(by_lane["small"])
     used = spend(small_q, small_budget, "small", lambda i: "do it next (decide list)" if i.do_next else "small: the lane's reserved share, oldest first")
-    plan.steps.append(Step(f"3. Small and quick, {ps.small_share:.0%} of the week, oldest first", min(small_budget, used + left[0]), used))
+    plan.steps.append(Step(f"3. Small and quick, {ps.small_share * 100:g}% of the week, oldest first", min(small_budget, used + left[0]), used))
 
     # 4. Standard work by score plus age.
     std_q = standard_order(by_lane["standard"], week_start, rate)
@@ -274,7 +274,7 @@ def plan_week(items: list[Item], week_start: date, ps: PlanSettings, rule: str =
         return f"standard: {rank_points(i, week_start, rate):g} rank points (score {i.score:g} + {weeks_waited(i, week_start)} weeks x {rate:g})"
     std_budget = ps.hours_per_week * ps.standard_share
     used = spend(std_q, std_budget, "standard", std_why)
-    plan.steps.append(Step(f"4. Standard, {ps.standard_share:.0%} of the week, by score plus age", min(std_budget, used + left[0]), used))
+    plan.steps.append(Step(f"4. Standard, {ps.standard_share * 100:g}% of the week, by score plus age", min(std_budget, used + left[0]), used))
 
     # 5. Unused hours flow to the other lanes.
     before = left[0]

@@ -13,12 +13,14 @@ code that makes the real week's plan (R13), and worked. A fixed seed (setting fo
 settings give the same forecast. When a lane takes in more hours than it puts out in the run, the output says so, and
 an item not done within the horizon in enough runs gets no date at that level: no finish date for the tail.
 
-The update trigger (R20): the forecast is run again by hand when the pipe changes. An update is drafted for an item
-only when its 85% date moves by more than update_trigger_days (setting, 7) from the last forecast, or it gains or
-loses its 85% date. The draft is a plain template filled from the forecast rows (no AI; stage 5 adds the drafts for
-three audiences). It waits in changedesk.updates as a draft: nothing is sent to anyone.
+The update trigger (R20): the forecast is run again by hand when the pipe changes. Updates are drafted only when an
+item's 85% date moves by more than update_trigger_days (setting, 7) from the last forecast, or it gains or loses its
+85% date. From stage 5 the saved run goes straight to scripts/draft_updates.py, which logs the triggers and drafts the
+updates for three audiences (requester, manager, executive) from the pipe's rows. Each waits in changedesk.updates as a
+draft for a person to approve: nothing is sent to anyone. (Stage 4 drafted a plain template here; it is retired.)
 
-  python scripts/forecast.py                  # forecast from this week; save it; draft what the trigger asks for
+  python scripts/forecast.py                  # forecast from this week; save it; draft the updates the trigger asks for
+  python scripts/forecast.py --no-updates     # save the forecast, and leave the drafting for scripts/draft_updates.py
   python scripts/forecast.py --dry-run        # forecast and report; save nothing
   python scripts/forecast.py --load 1.15      # a what-if run with heavier demand; saved as what-if, drafts nothing
 
@@ -38,7 +40,6 @@ import planner as P  # noqa: E402
 REPO = Path(__file__).resolve().parents[1]
 REPORTS = REPO / "docs" / "reports"
 KIND = {"urgent": "date_range", "standard": "date_range", "fixed_date": "chance_of_date", "small": "service_level"}
-TRIGGER_BY = "update trigger (template, no AI)"
 
 
 def d(x: date | None) -> str:
@@ -147,25 +148,6 @@ def triggers(prev: dict[str, date | None], rows: list[dict], days: int) -> list[
     return out
 
 
-def update_draft(row: dict, old: date | None, info: dict, run_id: str, now: str, days: int) -> dict:
-    """A plain status update for the requester, filled from the forecast rows only. A draft: nobody sends it."""
-    rid, new = row["request_id"], row["p85"]
-    head = f"Hello, {info['requester_role']}.\n\nThis is an update on your request {rid}, \"{info['title']}\"."
-    if new and old:
-        line = (f" We now expect it to be done by {new:%d %B %Y}; before, we expected {old:%d %B %Y}. We give the date we are 85% sure of, "
-                "and it moves when other work arrives or the team's hours change.")
-    elif new:
-        line = f" We can now give a date: we expect it to be done by {new:%d %B %Y}, the date we are 85% sure of."
-    else:
-        line = (f" Before, we expected it by {old:%d %B %Y}. We cannot give a date at the moment: more work is arriving than the team "
-                "can finish, so the queue is growing.")
-    body = head + line + "\n\nNothing is needed from you. If the need has changed, please raise a new request through the desk's intake form."
-    uid = f"U-{run_id}-{rid}"
-    return {"update_id": uid, "request_id": rid, "subject": f"An update on your request {rid}", "body": body, "drafted_by": TRIGGER_BY,
-            "drafted_at": now, "draft_problems": "",
-            "stamp": f"changedesk {uid} | no AI | update trigger@{P.PLANNER_VERSION} (85% date moved more than {days} days) | drafted by update trigger | {now}"}
-
-
 def run_forecast(conn, start_week: date, load: float = 1.0, runs: int | None = None):
     """Read the store, run the forecast, and build its rows. Returns (state, sim, rows, lanes, run settings)."""
     import desk_state
@@ -188,14 +170,22 @@ def run_forecast(conn, start_week: date, load: float = 1.0, runs: int | None = N
     return st, ps, sim, rows, lanes, n_hist
 
 
+def settings_line(s: dict) -> str:
+    """Which settings a report was made at (COURSES 2ND, 25/11/2026: the store moved from 40 to 36 hours a week that day)."""
+    pct = lambda k: f"{float(s[k]) * 100:g}%"  # noqa: E731
+    return (f"Made at these settings (changedesk.settings when the run was made): **{float(s['hours_per_week']):g} hours a week**; urgent buffer "
+            f"{pct('urgent_buffer_share')}, small and quick {pct('small_share')}, standard {pct('standard_share')}.")
+
+
 def report(st, ps, sim: P.SimResult, rows: list[dict], lanes: list[dict], run_id: str, load: float, n_hist: int, purpose: str,
-           drafts: list[dict], first_run: bool, saved: bool) -> str:
+           drafts: list[tuple[dict, date | None]], first_run: bool, saved: bool, prev_run_id: str | None = None) -> str:
     info = {**{i.request_id: i for i in st.items}}
     lines = [f"# The forecast by lane{' (what-if: demand x ' + f'{load:g})' if purpose == 'what-if' else ''}", "",
              f"Made by `scripts/forecast.py`, run `{run_id}`{'' if saved else ' (dry run, not saved)'}: {sim.runs} runs of the {sim.horizon} weeks "
              f"from {sim.start_week:%d/%m/%Y}, seed {st.settings['forecast_seed']}, new arrivals from each lane's own {n_hist} weeks of history"
              f"{f', at {load:g} times the usual demand' if load != 1 else ''}. Every week of every run is planned by the planner's `plan_week()`, "
              "the same code as the week's plan. Every ticket is made up.", "",
+             settings_line(st.settings), "",
              "## Each lane", "", "| Lane | Hours in a week (run) | Hours worked a week (run) | Takes in more than it puts out | |",
              "|---|---|---|---|---|"]
     for ln in lanes:
@@ -225,8 +215,11 @@ def report(st, ps, sim: P.SimResult, rows: list[dict], lanes: list[dict], run_id
     elif first_run:
         lines.append("No earlier forecast to compare with, so nothing is drafted. The next run, after the pipe changes, compares its 85% dates with these.")
     elif drafts:
-        lines += [f"{len(drafts)} items' 85% date moved by more than {st.settings['update_trigger_days']} days, so {len(drafts)} updates were drafted "
-                  "for a person to approve (nothing is sent):", ""] + [f"- {u['request_id']}: {u['body'].splitlines()[2]}" for u in drafts]
+        lines += [f"{len(drafts)} items' 85% date moved by more than {st.settings['update_trigger_days']} days since run `{prev_run_id}`, so the "
+                  "update drafter (`scripts/draft_updates.py`) drafts the updates for three audiences from the pipe's rows, for a person to "
+                  "approve; nothing is sent. The drafts and the source of every figure: [updates.md](updates.md).", "",
+                  "| Item | 85% date before | 85% date now |", "|---|---|---|"]
+        lines += [f"| {r['request_id']} | {d(old)} | {d(r['p85'])} |" for r, old in drafts]
     else:
         lines.append(f"No item's 85% date moved by more than {st.settings['update_trigger_days']} days since the last forecast, so nothing is drafted.")
     return "\n".join(lines) + "\n"
@@ -238,6 +231,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--load", type=float, default=1.0, help="demand as a multiple of each lane's own history (a what-if run)")
     ap.add_argument("--runs", type=int, help="override forecast_runs for this run only (a what-if run)")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-updates", action="store_true", help="save the forecast; do not draft the updates now")
     args = ap.parse_args(argv)
     start = date.fromisoformat(args.week) if args.week else P.monday(date.today())
     purpose = "what-if" if (args.load != 1.0 or args.runs) else "forecast"
@@ -252,30 +246,32 @@ def main(argv: list[str] | None = None) -> int:
                 prev = {r["request_id"]: (date.fromisoformat(r["p85"]) if r["p85"] else None)
                         for r in desk_db.rows(conn, "select request_id, p85 from changedesk.forecasts where run_id = %s and request_id is not null",
                                               (prev_run["run_id"],))}
-                info = {r["request_id"]: r for r in st.rows.values()}
-                drafts = [update_draft(r, old, info[r["request_id"]], run_id, now, int(st.settings["update_trigger_days"]))
-                          for r, old in triggers(prev, rows, int(st.settings["update_trigger_days"]))]
+                drafts = triggers(prev, rows, int(st.settings["update_trigger_days"]))
             run = {"run_id": run_id, "purpose": purpose, "start_week": start.isoformat(), "rule": "lanes", "runs": sim.runs,
                    "horizon_weeks": sim.horizon, "seed": int(st.settings["forecast_seed"]), "load": args.load, "safe_start_days": ps.safe_start_days,
                    "settings": st.settings, "summary": {"history_weeks": n_hist, "open_items": len(st.items), "waiting": len(st.waiting),
-                                                        "drafts": len(drafts), "previous_run": prev_run["run_id"] if prev_run else None},
+                                                        "triggers": len(drafts), "previous_run": prev_run["run_id"] if prev_run else None},
                    "made_by": "forecast (plain script)", "made_at": now,
                    "stamp": f"changedesk {run_id} | no AI | forecast@{P.PLANNER_VERSION} lanes rule, {sim.runs} runs, seed {st.settings['forecast_seed']} | made by forecast (plain script) | {now}"}
             if not args.dry_run:
-                desk_db.call_function(conn, "select changedesk.log_forecast(%s::jsonb, %s::jsonb, %s::jsonb)", run, rows + lanes, drafts)
+                desk_db.call_function(conn, "select changedesk.log_forecast(%s::jsonb, %s::jsonb, %s::jsonb)", run, rows + lanes, [])
     except (LookupError, OSError) as e:
         print(f"CANNOT RUN {e}")
         return 2
     name = "forecast.md" if purpose == "forecast" else "forecast-what-if.md"
     REPORTS.mkdir(parents=True, exist_ok=True)
-    (REPORTS / name).write_text(report(st, ps, sim, rows, lanes, run_id, args.load, n_hist, purpose, drafts, prev_run is None, not args.dry_run),
-                                encoding="utf-8")
+    (REPORTS / name).write_text(report(st, ps, sim, rows, lanes, run_id, args.load, n_hist, purpose, drafts, prev_run is None, not args.dry_run,
+                                       prev_run["run_id"] if prev_run else None), encoding="utf-8")
     print(f"Forecast {run_id} ({purpose}{', dry run' if args.dry_run else ''}): {sim.runs} runs x {sim.horizon} weeks from {start:%d/%m/%Y}, "
           f"load {args.load:g}, {len(rows)} items.")
     for ln in lanes:
         print(f"  {P.LANE_WORDS[ln['lane']]:<16} {ln['note']}")
-    print(f"  Update trigger: {'what-if, none' if purpose == 'what-if' else ('first forecast, nothing to compare' if prev_run is None else f'{len(drafts)} drafted')}.")
+    print(f"  Update trigger: {'what-if, none' if purpose == 'what-if' else ('first forecast, nothing to compare' if prev_run is None else f'{len(drafts)} items moved')}.")
     print(f"Wrote docs/reports/{name}.")
+    if drafts and purpose == "forecast" and not args.dry_run and not args.no_updates:
+        import draft_updates
+
+        return draft_updates.main(["--run", run_id])
     return 0
 
 

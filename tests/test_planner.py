@@ -203,16 +203,6 @@ def test_r20_a_small_change_drafts_nothing_and_a_large_one_drafts_an_update():
     assert F.triggers({}, rows, 7) == []
 
 
-def test_r20_the_update_draft_is_plain_and_names_the_request(drafter_eng):
-    info = {"requester_role": "Sales manager", "title": "Route new Leads by region"}
-    moved = F.update_draft(frow("CD-0010", date(2026, 12, 18)), date(2026, 12, 4), info, "fc-1", "2026-11-25T01:00:00Z", 7)
-    lost = F.update_draft(frow("CD-0010", None), date(2026, 12, 4), info, "fc-1", "2026-11-25T01:00:00Z", 7)
-    assert "18 December 2026" in moved["body"] and "04 December 2026" in moved["body"] and moved["drafted_by"].endswith("(template, no AI)")
-    assert "cannot give a date" in lost["body"] and moved["stamp"].startswith("changedesk U-fc-1-CD-0010 | no AI")
-    for u in (moved, lost):
-        assert drafter_eng.call("draftProblems", {"request_id": "CD-0010"}, {"subject": u["subject"], "body": u["body"]}) == []
-
-
 # ---------------------------------------------------------------- R17: the lane growth flag
 
 def lh(lane, week, arrived, finished):

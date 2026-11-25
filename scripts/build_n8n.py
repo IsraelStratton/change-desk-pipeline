@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the Change Desk's n8n workflows from the engines and the playbook (stages 1 and 2).
+"""Build the Change Desk's n8n workflows from the engines and the playbook (stages 1, 2 and 5).
 
   n8n/intake.json         the intake form: a request gets an id and its first status history row (R1)
   n8n/triage.json         run triage by hand: one Claude step per request in the inbox (R2 to R8)
@@ -8,6 +8,9 @@
   n8n/change-score.json   the score change form: a person changes one part, with who and why (R10)
   n8n/decide.json         the decide list form: do it next, merge, or close with a reason; a close
                           drafts a message to the requester, which nobody sends (R16)
+  n8n/approve-updates.json  the approval form (stage 5): a person approves or rejects every draft, with the
+                          source row of each figure shown; an approved update goes to the outbox table and
+                          nowhere else (R22 to R24). No workflow has a node that sends
 
 Shaped like the GTM pipeline's builders (scripts/build_n8n_routing.py): made by this script, never edited
 by hand; every Code node that needs an engine gets engine/common.js and that engine pasted in whole, so
@@ -49,13 +52,14 @@ IMPORT_START = "// -------------------------------------------------------------
 IMPORT_END = "// ---------------------------------------------------------------- end of imports"
 NS = uuid.UUID("5b2e8c14-7d3a-4f61-9e08-c1a2b3d4e5f6")  # fixed, so the build is the same every time
 FORMS = {"intake": "changedesk-intake", "triage": "changedesk-triage", "confirm": "changedesk-confirm-lanes",
-         "score": "changedesk-change-score", "decide": "changedesk-decide"}
+         "score": "changedesk-change-score", "decide": "changedesk-decide", "approve": "changedesk-approve-updates"}
 TARGETS = {
     "intake": {"file": "intake.json", "name": "Change Desk: intake form", "trigger": "Request Form", "form_path": FORMS["intake"]},
     "triage": {"file": "triage.json", "name": "Change Desk: run triage", "trigger": "Start Triage", "form_path": FORMS["triage"]},
     "confirm": {"file": "confirm-lanes.json", "name": "Change Desk: confirm lanes", "trigger": "Start Confirmation", "form_path": FORMS["confirm"]},
     "score": {"file": "change-score.json", "name": "Change Desk: change a score", "trigger": "Start Score Change", "form_path": FORMS["score"]},
     "decide": {"file": "decide.json", "name": "Change Desk: decide list", "trigger": "Start Decide List", "form_path": FORMS["decide"]},
+    "approve": {"file": "approve-updates.json", "name": "Change Desk: approve updates", "trigger": "Start Approval", "form_path": FORMS["approve"]},
 }
 
 INBOX_SQL = ("select request_id, source, requester_role, title, body, requester_due_date::text as requester_due_date, "
@@ -70,9 +74,14 @@ RANKED_SQL = ("select rank, request_id, title, status, score::float8 as score, w
 WORKING_SQL = ("select w.request_id, w.part, w.points, w.reason, w.set_by, w.is_change, w.previous_points "
                "from changedesk.score_working w join changedesk.standard_ranked r using (request_id) order by w.request_id, w.part;")
 DECIDE_SQL = ("select request_id, title, lane, status, requester_role, playbook, arrived_on::text as arrived_on, age_days, "
-              "age_limit_days, days_over, score::float8 as score from changedesk.decide_list;")
+              "age_limit_days, days_over, score::float8 as score, due_date::text as due_date, why from changedesk.decide_list;")
 OPEN_SQL = ("select request_id, title, playbook, status from changedesk.requests "
             "where status in ('Triaged', 'Planned', 'In progress') order by arrived_at, request_id;")
+DRAFTS_SQL = ("select u.update_id, u.audience, u.kind, coalesce(u.to_role, r.requester_role) as to_role, u.request_id, u.subject, u.body, "
+              "u.draft_problems, u.drafted_by, u.drafted_at::text as drafted_at, u.forecast_run_id, u.facts, u.figures, "
+              "(select coalesce(json_agg(s), '[]'::json) from changedesk.stale_facts(u.update_id) s) as stale "
+              "from changedesk.updates u left join changedesk.requests r on r.request_id = u.request_id "
+              "where u.status = 'draft' order by u.drafted_at, u.update_id;")
 SUMMARY_SQL = ("select run_id, calls, failed, input_tokens, output_tokens, total_cost_usd::float8 as total_cost_usd, "
                "cost_per_call_usd::float8 as cost_per_call_usd from changedesk.run_summary where run_id = $1;")
 
@@ -412,7 +421,7 @@ def decide() -> dict:
     w.pg("Read Decide List", DECIDE_SQL, read=True)
     w.pg("Read Open Items", OPEN_SQL, read=True)
     scoring = engine_source("scoring")
-    drafter = engine_source("drafter")
+    drafter = engine_source("figures", "drafter")
     w.code("Build Form", scoring + """// ===== n8n node: Build Form (run once for all items) =====
 const list = $('Read Decide List').all().map((i) => i.json).filter((r) => r.request_id);
 const open = $('Read Open Items').all().map((i) => i.json).filter((r) => r.request_id);
@@ -484,7 +493,51 @@ return [{ json: { title: 'Decisions recorded', message: `Run ${a.run_id}: ${n('d
     return w.build()
 
 
-BUILDERS = {"intake": intake, "triage": triage, "confirm": confirm, "score": score, "decide": decide}
+def approve() -> dict:
+    w = Workflow("approve")
+    w.trigger("Change Desk: approve updates",
+              "Every draft update that waits for a person: the requester, manager and executive updates the forecast trigger drafted, and the "
+              "close messages from the decide list. Each shows the row every figure comes from. Approve or reject each one. An approved update "
+              "is placed in the outbox table and nowhere else: nothing is sent to anyone.",
+              [{"fieldLabel": "What to review", "fieldName": "scope", "fieldType": "dropdown", "requiredField": True,
+                "fieldOptions": {"values": [{"option": "Every draft waiting for approval"}]}}],
+              "Show the drafts")
+    w.pg("Read Drafts", DRAFTS_SQL, read=True)
+    engine = engine_source("figures", "drafter", "updates")
+    w.code("Build Form", engine + """// ===== n8n node: Build Form (run once for all items) =====
+// Drafts with a problem from the code check, or whose facts no longer match their rows, can only be rejected.
+const drafts = $input.all().map((i) => i.json).filter((d) => d.update_id);
+return [{ json: { count: drafts.length, run_id: `n8n-${$execution.id}`, drafts, form_fields: drafts.length ? buildApprovalForm(drafts, { run_id: `n8n-${$execution.id}` }) : [] } }];
+""")
+    w.if_count("Anything to Approve?", "$json.count")
+    w.page("Approval", "Approve the updates", "Nothing is sent to anyone. An approved update goes to the outbox table. Your name goes on each decision.",
+           "Build Form", "Record my decisions")
+    w.code("Apply Choices", engine + """// ===== n8n node: Apply Choices (run once for all items) =====
+const b = $('Build Form').first().json;
+const rows = applyApprovals(b.drafts, $input.first().json, { run_id: b.run_id, decided_at: new Date().toISOString() });
+return [{ json: { run_id: b.run_id, rows, waiting: b.count } }];
+""")
+    w.pg("Approve Updates", "select changedesk.approve_updates($1::jsonb) as result;", "={{ JSON.stringify($json.rows) }}")
+    w.code("Done Message", """// ===== n8n node: Done Message (run once for all items) =====
+const a = $('Apply Choices').first().json;
+const r = $input.first().json.result || {};
+const n = (k) => (r[k] || []).length;
+return [{ json: { title: 'Decisions recorded', message: [
+  `Run ${a.run_id}: ${n('approved')} approved and placed in the outbox, ${n('rejected')} rejected, ${a.waiting - a.rows.length} left as drafts.`,
+  'Nothing was sent to anyone. Each decision carries a stamp with your name; look it up in changedesk.decisions and changedesk.outbox.',
+].join(' ') } }];
+""")
+    w.code("Nothing Message", message_js("Nothing waits", "'No draft waits for approval.'"), y=520)
+    w.done()
+    w.chain(w.t["trigger"], "Read Drafts", "Build Form", "Anything to Approve?")
+    w.link("Anything to Approve?", "Approval", 0)
+    w.link("Anything to Approve?", "Nothing Message", 1)
+    w.chain("Approval", "Apply Choices", "Approve Updates", "Done Message", "Done")
+    w.link("Nothing Message", "Done")
+    return w.build()
+
+
+BUILDERS = {"intake": intake, "triage": triage, "confirm": confirm, "score": score, "decide": decide, "approve": approve}
 
 
 def render(wf: dict) -> str:

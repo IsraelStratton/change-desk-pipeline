@@ -1,0 +1,144 @@
+{
+ "made_at": "2026-11-25T00:36:29Z",
+ "read_from": "changedesk.call_cost (the run log with the price table)",
+ "by_step": [
+  {
+   "step": "updater",
+   "source": "python",
+   "model": "claude-haiku-5-5",
+   "cases": "",
+   "calls": 28,
+   "failed": 1,
+   "cost_per_call_usd": 0.00078872,
+   "total_cost_usd": 0.022084,
+   "avg_input_tokens": 3170,
+   "avg_output_tokens": 943
+  },
+  {
+   "step": "triage",
+   "source": "eval",
+   "model": "claude-haiku-5-5",
+   "cases": "E",
+   "calls": 360,
+   "failed": 2,
+   "cost_per_call_usd": 0.00087463,
+   "total_cost_usd": 0.314867,
+   "avg_input_tokens": 6903,
+   "avg_output_tokens": 369
+  },
+  {
+   "step": "triage",
+   "source": "eval",
+   "model": "claude-haiku-5-5",
+   "cases": "F",
+   "calls": 90,
+   "failed": 0,
+   "cost_per_call_usd": 0.00088539,
+   "total_cost_usd": 0.079685,
+   "avg_input_tokens": 7012,
+   "avg_output_tokens": 368
+  },
+  {
+   "step": "triage",
+   "source": "n8n",
+   "model": "claude-haiku-5-5",
+   "cases": "",
+   "calls": 1,
+   "failed": 0,
+   "cost_per_call_usd": 0.0008702,
+   "total_cost_usd": 0.00087,
+   "avg_input_tokens": 6977,
+   "avg_output_tokens": 345
+  },
+  {
+   "step": "triage",
+   "source": "python",
+   "model": "claude-haiku-5-5",
+   "cases": "",
+   "calls": 12,
+   "failed": 0,
+   "cost_per_call_usd": 0.00088208,
+   "total_cost_usd": 0.010585,
+   "avg_input_tokens": 7021,
+   "avg_output_tokens": 360
+  },
+  {
+   "step": "drafter",
+   "source": "n8n",
+   "model": "claude-haiku-5-5",
+   "cases": "",
+   "calls": 1,
+   "failed": 0,
+   "cost_per_call_usd": 0.0001768,
+   "total_cost_usd": 0.000177,
+   "avg_input_tokens": 898,
+   "avg_output_tokens": 174
+  },
+  {
+   "step": "drafter",
+   "source": "python",
+   "model": "claude-haiku-5-5",
+   "cases": "",
+   "calls": 12,
+   "failed": 0,
+   "cost_per_call_usd": 0.00016848,
+   "total_cost_usd": 0.002022,
+   "avg_input_tokens": 864,
+   "avg_output_tokens": 164
+  }
+ ],
+ "updater_runs": [
+  {
+   "run_id": "up-20261125T001949Z",
+   "calls": 7,
+   "failed": 1,
+   "version": "1.0.0",
+   "total_cost_usd": 0.005976,
+   "clean": 2
+  },
+  {
+   "run_id": "up-20261125T002810Z",
+   "calls": 7,
+   "failed": 0,
+   "version": "1.0.1",
+   "total_cost_usd": 0.005488,
+   "clean": 6
+  },
+  {
+   "run_id": "up-20261125T002910Z",
+   "calls": 7,
+   "failed": 0,
+   "version": "1.0.1",
+   "total_cost_usd": 0.005605,
+   "clean": 6
+  },
+  {
+   "run_id": "up-20261125T003014Z",
+   "calls": 7,
+   "failed": 0,
+   "version": "1.0.2",
+   "total_cost_usd": 0.005016,
+   "clean": 6
+  }
+ ],
+ "prices": [
+  {
+   "model": "claude-haiku-5-5",
+   "input_per_mtok": 0.1,
+   "output_per_mtok": 0.5,
+   "read_on": "2026-11-23",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+  },
+  {
+   "model": "claude-sonnet-5-5",
+   "input_per_mtok": 2.0,
+   "output_per_mtok": 10.0,
+   "read_on": "2026-11-23",
+   "source": "https://platform.claude.com/docs/en/about-claude/pricing"
+  }
+ ],
+ "totals": {
+  "calls": 504,
+  "total": 0.4302898
+ }
+}

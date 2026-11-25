@@ -6,12 +6,13 @@ import sys
 from conftest import REPO
 
 sys.path.insert(0, str(REPO / "scripts"))
+import build_n8n  # noqa: E402
 import clean_exports as ce  # noqa: E402
 
 
 def test_every_workflow_file_is_clean():
     files = ce.workflow_files()
-    assert len(files) == 5
+    assert sorted(files) == sorted(f"n8n/{t['file']}" for t in build_n8n.TARGETS.values())  # all six, stage 5's approval form too
     assert ce.check_all(ce.tree_reader(), None, files) == []
 
 

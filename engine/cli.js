@@ -1,6 +1,6 @@
 // Bridge from Python to the engines: JSON in on stdin, JSON out on stdout. Copied from the GTM
 // pipeline (engine/cli.js) with this build's engines.
-//   {"module": "triage" | "scoring" | "drafter" | "common", "calls": [{"fn": "parseTriagePlaybook", "args": ["..."]}, ...]}
+//   {"module": "triage" | "scoring" | "drafter" | "updates" | "common", "calls": [{"fn": "parseTriagePlaybook", "args": ["..."]}, ...]}
 // Each call may use the result of an earlier one: an argument {"$ref": 0} is replaced by the
 // result of call 0. Only functions the engine exports can be called.
 'use strict';
@@ -9,6 +9,8 @@ const ENGINES = {
   triage: () => require('./triage.js'),
   scoring: () => require('./scoring.js'),
   drafter: () => require('./drafter.js'),
+  figures: () => require('./figures.js'),
+  updates: () => require('./updates.js'),
 };
 
 function resolve(arg, results) {

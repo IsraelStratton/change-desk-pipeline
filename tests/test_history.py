@@ -71,3 +71,32 @@ def test_contact_details_appear_once_on_purpose_and_are_made_up():
     text = json.dumps(DOC)
     assert "@" not in text.replace("@freight.example", "")  # one inbox request holds made-up contact details on purpose
     assert sum("Jane Doe" in r.get("body", "") for r in REQS.values()) == 1
+
+
+def test_the_demo_reset_puts_the_store_back_to_the_history_and_the_starting_settings():
+    """COURSES 2ND's guard (25/11/2026): load_history.py --reset gives a demo the made-up history and the starting settings
+    (40 hours a week, the 20/70 split), and clears everything stages 3 to 5 added (forecast runs, triggers, drafts, the
+    outbox). Run here as the owner inside a transaction that is rolled back, so the live store is untouched."""
+    import sys
+
+    from conftest import owner_sql
+
+    sys.path.insert(0, str(REPO / "scripts"))
+    import load_history
+
+    doc = json.loads((REPO / "sample" / "history.json").read_text(encoding="utf-8"))
+    sql = load_history.load_sql(doc, reset=True, wrap=False)
+    assert not any(line.strip().lower() in ("commit;", "begin;") for line in sql.splitlines()), "the load must not commit its own transaction"
+    check = ("select json_build_object('hours', changedesk.setting_num('hours_per_week'), 'small', changedesk.setting_num('small_share'), "
+             "'standard', changedesk.setting_num('standard_share'), 'requests', (select count(*) from changedesk.requests), "
+             "'updates', (select count(*) from changedesk.updates), 'outbox', (select count(*) from changedesk.outbox), "
+             "'runs', (select count(*) from changedesk.forecast_runs), 'triggers', (select count(*) from changedesk.update_triggers), "
+             "'by', (select changed_by from changedesk.settings where key = 'hours_per_week'), "
+             "'kept', (select count(*) from changedesk.settings_history where key = 'hours_per_week'));")
+    out = owner_sql(sql + check)
+    assert out.returncode == 0, out.stderr[-500:]
+    got = json.loads(out.stdout.strip().splitlines()[-1])
+    start = {s["key"]: s["value"] for s in json.loads((REPO / "settings" / "settings.json").read_text(encoding="utf-8"))["settings"]}
+    assert (got["hours"], got["small"], got["standard"]) == (start["hours_per_week"], start["small_share"], start["standard_share"]) == (40, 0.2, 0.7)
+    assert got["requests"] == doc["counts"]["requests"] and got["updates"] == got["outbox"] == got["runs"] == got["triggers"] == 0
+    assert got["by"] in ("load_history.py --reset", "setup_db.py") and got["kept"] >= 1  # every value the setting has had is kept

@@ -337,3 +337,88 @@ begin
     alter table changedesk.forecasts add constraint forecasts_run_fk foreign key (run_id) references changedesk.forecast_runs (run_id);
   end if;
 end $$;
+
+-- ---------------------------------------------------------------- stage 5 (25/11/2026): updates for three audiences, approval, outbox
+
+-- R22 to R25. An update is drafted for one audience from a pack of facts, each fact a row's value with its source
+-- (changedesk.fact_value reads it again). to_role: who it is for (a requester's role, the desk manager, the
+-- executive sponsor), never a name. items: the requests it covers. facts: the pack it was drafted from.
+-- figures: every figure found in its text and the fact it was traced to (R23). coverage: for a requester update,
+-- how each open item is answered (R25). decision_id: the person's approval or rejection.
+alter table changedesk.updates add column if not exists to_role text;
+alter table changedesk.updates add column if not exists items jsonb not null default '[]'::jsonb;
+alter table changedesk.updates add column if not exists facts jsonb not null default '[]'::jsonb;
+alter table changedesk.updates add column if not exists figures jsonb not null default '[]'::jsonb;
+alter table changedesk.updates add column if not exists coverage jsonb not null default '[]'::jsonb;
+alter table changedesk.updates add column if not exists decision_id text;
+comment on column changedesk.updates.approved_by is 'Who approved or rejected the draft (a person, on the approval form). Null while it is a draft.';
+comment on table changedesk.updates is 'Each draft: audience, text, the forecast run it used, the facts it was drafted from, who approved it and when. Nothing here is sent: an approved update is placed in changedesk.outbox, and nothing reads the outbox to send it.';
+
+-- R20 as rows: each item whose 85% date moved by more than the setting update_trigger_days between two forecast
+-- runs, or gained or lost its date. changedesk.log_updates works the dates out again from the forecasts rows, so a
+-- trigger that did not happen cannot be written.
+create table if not exists changedesk.update_triggers (
+  run_id           text not null references changedesk.forecast_runs (run_id),
+  previous_run_id  text not null references changedesk.forecast_runs (run_id),
+  request_id       text not null references changedesk.requests (request_id),
+  old_p85          date,
+  new_p85          date,
+  moved_days       integer,
+  why              text not null check (why in ('moved', 'gained a date', 'lost its date')),
+  logged_at        timestamptz not null default now(),
+  primary key (run_id, request_id),
+  check (run_id <> previous_run_id),
+  check ((why = 'moved') = (old_p85 is not null and new_p85 is not null)),
+  check (why <> 'moved' or moved_days = new_p85 - old_p85)
+);
+comment on table changedesk.update_triggers is 'R20: the items a forecast run triggers an update for, against the run before it. Written only by log_updates, which checks each one against the forecasts rows.';
+
+-- The person's decision on an update: kind 'update', with no request when the update is for the manager or the executive.
+alter table changedesk.decisions drop constraint if exists decisions_kind_check;
+alter table changedesk.decisions add constraint decisions_kind_check check (kind in ('lane', 'split', 'score', 'decide', 'update'));
+alter table changedesk.decisions alter column request_id drop not null;
+alter table changedesk.decisions drop constraint if exists decisions_request_needed;
+alter table changedesk.decisions add constraint decisions_request_needed check (kind = 'update' or request_id is not null);
+
+-- R24: the outbox. An approved update is placed here and nowhere else; nothing in this build reads it to send it
+-- (no workflow has a node that sends, and the app's login has no function that sends). A row needs an approval
+-- decision for that very update, by a person, and the update approved with no draft problems; rows are never
+-- changed or removed.
+create table if not exists changedesk.outbox (
+  outbox_id    text primary key,
+  update_id    text not null unique references changedesk.updates (update_id),
+  decision_id  text not null unique references changedesk.decisions (decision_id),
+  audience     text not null check (audience in ('requester', 'manager', 'executive')),
+  to_role      text not null check (length(trim(to_role)) > 0),
+  subject      text not null,
+  body         text not null,
+  approved_by  text not null check (length(trim(approved_by)) > 0),
+  approved_at  timestamptz not null,
+  held         text not null default 'Held in the outbox: nothing is sent to anyone in this build.',
+  stamp        text not null check (stamp like 'changedesk %'),
+  placed_at    timestamptz not null default now()
+);
+comment on table changedesk.outbox is 'R24: what would be sent, once a person has approved it. Nothing is sent from here: no workflow or function reads it to send.';
+
+create or replace function changedesk.check_outbox() returns trigger
+language plpgsql set search_path = changedesk, pg_temp as $$
+begin
+  if tg_op <> 'INSERT' then
+    raise exception 'the outbox is add-only: % is refused', lower(tg_op);
+  end if;
+  if not exists (select 1 from changedesk.decisions d
+                 where d.decision_id = new.decision_id and d.kind = 'update' and d.action = 'approved'
+                   and d.detail ->> 'update_id' = new.update_id and d.decided_by = new.approved_by) then
+    raise exception 'update % has no approval row by %: nothing goes to the outbox without one', new.update_id, new.approved_by;
+  end if;
+  if not exists (select 1 from changedesk.updates u
+                 where u.update_id = new.update_id and u.status = 'approved' and u.draft_problems = ''
+                   and u.decision_id = new.decision_id and u.subject = new.subject and u.body = new.body) then
+    raise exception 'update % is not approved as it stands', new.update_id;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists outbox_check_trg on changedesk.outbox;
+create trigger outbox_check_trg before insert or update or delete on changedesk.outbox
+  for each row execute function changedesk.check_outbox();

@@ -6,7 +6,7 @@
 // updates table as status 'draft', a person approves it in stage 5, and nothing is sent to anyone.
 // Used the same three ways as engine/triage.js. Pure functions only.
 
-// ---------------------------------------------------------------- imports (not pasted into n8n: there, common.js sits above this file)
+// ---------------------------------------------------------------- imports (not pasted into n8n: there, common.js and figures.js sit above this file)
 /* eslint-disable no-var */
 var C = require('./common.js');
 var sha256Hex = C.sha256Hex;
@@ -16,9 +16,12 @@ var PHONE_RE = C.PHONE_RE;
 var wordGrams = C.wordGrams;
 var normaliseHttp = C.normaliseHttp;
 var isoSeconds = C.isoSeconds;
+var G = require('./figures.js');
+var traceFigures = G.traceFigures;
 // ---------------------------------------------------------------- end of imports
 
-const DRAFTER_VERSION = '1.0.1'; // 1.0.1 (25/11/2026): the promise check reads one sentence at a time
+const DRAFTER_VERSION = '1.0.2'; // 1.0.2 (25/11/2026, stage 5): every figure in a close message is traced to its row (R23)
+// 1.0.1 (25/11/2026): the promise check reads one sentence at a time
 const DRAFTER_NAME = 'close-message';
 const DRAFT_FLAGS = ['possible_injection', 'personal_data'];
 const DRAFT_KEYS = ['subject', 'body', 'flags'];
@@ -101,6 +104,24 @@ function makesPromise(text) {
   });
 }
 
+// R23 for a close message: the facts its record holds, each with its source row. The date it was asked is read in
+// UTC, as the store reads it (changedesk.decide gives arrived_at::date in the session's zone, UTC).
+function closeFacts(closed) {
+  const rid = closed.request_id;
+  const row = (column, extra) => Object.assign({ table: 'requests', where: { request_id: rid }, column }, extra || {});
+  const facts = [
+    { id: 'F1', kind: 'id', unit: null, says: `${rid}: the request id`, value: rid, source: row('request_id') },
+    { id: 'F2', kind: 'text', unit: null, says: `${rid}: its title`, value: String(closed.title || ''), source: row('title') },
+    { id: 'F3', kind: 'date', unit: null, says: `${rid}: the day it was asked`, value: String(closed.arrived_on || '').slice(0, 10),
+      source: row('arrived_at', { cast: 'date' }) },
+  ];
+  // A fixed-date item's title often holds its date; the drafter may write it out in full, so the due date is a fact too.
+  if (closed.due_date) {
+    facts.push({ id: 'F4', kind: 'date', unit: null, says: `${rid}: the date it was due`, value: String(closed.due_date).slice(0, 10), source: row('due_date') });
+  }
+  return facts;
+}
+
 // Checked in code before anyone sees it.
 function draftProblems(closed, d) {
   const problems = [];
@@ -116,6 +137,9 @@ function draftProblems(closed, d) {
   }
   if (EMAIL_RE.test(text) || (text.match(PHONE_RE) || []).some((p) => p.replace(/\D/g, '').length >= 8)) problems.push('it holds contact details');
   if (makesPromise(text)) problems.push('it makes a promise');
+  const traced = traceFigures(text, { items: [{ request_id: closed.request_id, title: closed.title }], facts: closeFacts(closed) });
+  if (traced.untraced.length) problems.push(`figures with no source in the record: ${traced.untraced.map((f) => `"${f.text}"`).join(', ')}`);
+  if (traced.in_words.length) problems.push(`figures written in words: ${traced.in_words.map((f) => `"${f.text}"`).join(', ')}`);
   const source = wordGrams(REPEAT_SOURCE, 8);
   for (const g of wordGrams(text, 8)) if (source.has(g)) { problems.push('it repeats the instructions'); break; }
   return problems;
@@ -172,10 +196,14 @@ function checkCloseDraft(closed, http, ctx) {
   const d = { subject: draftCleanText(parsed.subject, DRAFT_MAX_SUBJECT + 40), body: draftCleanText(parsed.body, DRAFT_MAX_BODY + 200) };
   const problems = draftProblems(closed, d);
   if (parsed.flags.length) problems.push(`the drafter flagged ${parsed.flags.join(', ')}`);
+  const facts = closeFacts(closed);
   const draft = {
     update_id: updateId, run_id: c.run_id, audience: 'requester', kind: 'close', request_id: closed.request_id,
+    to_role: String(closed.requester_role || '') || null, items: [closed.request_id],
     subject: d.subject, body: d.body, call_id: callId, drafted_by: 'message_drafter', drafted_at: now,
-    draft_problems: problems.join('; '), stamp: draftStamp(updateId, c.model, 'drafted', 'message_drafter', now),
+    draft_problems: problems.join('; '), facts,
+    figures: traceFigures(`${d.subject}\n${d.body}`, { items: [{ request_id: closed.request_id, title: closed.title }], facts }).figures,
+    stamp: draftStamp(updateId, c.model, 'drafted', 'message_drafter', now),
   };
   const handoff = {
     handoff_id: `${callId}-H1`, run_id: c.run_id, request_id: closed.request_id, from_agent: `person: decide list (${closed.decided_by || 'reviewer'})`,
@@ -189,7 +217,7 @@ function checkCloseDraft(closed, http, ctx) {
 // ---------------------------------------------------------------- exports (not pasted into n8n)
 
 const DRAFTER = {
-  DRAFTER_VERSION, DRAFTER_NAME, DRAFTER_BRIEF, DRAFT_FLAGS, drafterBrief, closeRecord, draftSchema, buildCloseDraftRequest,
+  DRAFTER_VERSION, DRAFTER_NAME, DRAFTER_BRIEF, DRAFT_FLAGS, drafterBrief, closeRecord, closeFacts, draftSchema, buildCloseDraftRequest,
   draftProblems, makesPromise, checkCloseDraft, draftStamp,
 };
 if (typeof module !== 'undefined' && module.exports) module.exports = DRAFTER;

@@ -6,6 +6,7 @@ by fixed answers through the real engine (engine/triage.js), so these tests spen
 Skipped where there is no local store (CI).
 """
 import json
+from datetime import date
 import sys
 from pathlib import Path
 
@@ -376,10 +377,53 @@ def test_r16_the_decide_list_fills_from_the_sample_history(db):
     # Items a person has decided leave the list (test run n8n-8909 decided three of the seven), so count them too.
     decided = db.execute("select count(distinct request_id) as n from changedesk.decisions where kind = 'decide'").fetchone()["n"]
     assert len(rows) + decided >= 5 and len(rows) >= 3
-    assert all(r["age_days"] > r["age_limit_days"] for r in rows)
-    assert {r["lane"] for r in rows} == {"small", "standard"}
-    limits = {r["lane"]: r["age_limit_days"] for r in rows}
+    aged = [r for r in rows if r["why"] == "past the age limit"]
+    assert all(r["age_days"] > r["age_limit_days"] for r in aged)
+    assert {r["lane"] for r in aged} == {"small", "standard"}
+    limits = {r["lane"]: r["age_limit_days"] for r in aged}
     assert limits == {"small": SETTINGS["age_limit_days_small"], "standard": SETTINGS["age_limit_days_standard"]}
+
+
+MISSED = ["CD-0046", "CD-0060", "CD-0089"]  # the three fixed dates the old rule missed (stage 0's history)
+
+
+def test_r16_build_addition_a_fixed_date_past_its_date_is_on_the_list_at_once_whatever_its_age(db):
+    """Israel's decision, 25/11/2026: a fixed-date item whose date has passed goes on the decide list at once, whatever
+    its age, and first. CD-0149 (asked 22/11, due 04/12) shows it: not on the list on its date, on it the day after,
+    though it is 13 days old and no lane's age limit is that short."""
+    rows = desk_db.rows(db, "select * from changedesk.decide_list_at('2026-11-25')")
+    passed = [r for r in rows if r["why"] == "its fixed date has passed"]
+    left = {r["request_id"] for r in desk_db.rows(db, "select request_id from changedesk.requests where request_id = any(%s) "
+                                                     "and status in ('Triaged', 'Planned', 'In progress')", (MISSED,))}
+    if len(left) < len(MISSED):
+        pytest.skip("the missed dates have been decided already (after the test run): CD-0149 below still shows the rule")
+    assert {r["request_id"] for r in passed} >= left, "the three missed dates show on the list"
+    assert all(r["lane"] == "fixed_date" and r["age_limit_days"] is None for r in passed)
+    assert all(r["days_over"] == (date(2026, 11, 25) - date.fromisoformat(r["due_date"])).days for r in passed)
+    assert [r["why"] for r in rows][:len(passed)] == ["its fixed date has passed"] * len(passed), "they come first"
+    on_the_day = {r["request_id"] for r in desk_db.rows(db, "select request_id from changedesk.decide_list_at('2026-12-04')")}
+    day_after = desk_db.rows(db, "select * from changedesk.decide_list_at('2026-12-05') where request_id = 'CD-0149'")
+    assert "CD-0149" not in on_the_day
+    assert len(day_after) == 1 and day_after[0]["age_days"] == 13 and day_after[0]["days_over"] == 1
+    assert day_after[0]["age_days"] < min(SETTINGS["age_limit_days_small"], SETTINGS["age_limit_days_standard"])
+
+
+def test_r16_build_addition_a_missed_date_can_be_closed_as_overtaken_and_the_close_is_drafted(db, scoring_eng):
+    """What COURSES 2ND does in the test run, here inside a rolled-back transaction: close the missed dates on the decide
+    form as overtaken. Each close is the item's own reason, and each goes to the message drafter."""
+    listed = desk_db.rows(db, "select request_id, title, lane, status, requester_role, playbook, arrived_on::text as arrived_on, age_days, "
+                              "age_limit_days, days_over, score, due_date::text as due_date, why from changedesk.decide_list_at(%s)", (NOW[:10],))
+    missed = [r for r in listed if r["request_id"] in MISSED]
+    if len(missed) < len(MISSED):
+        pytest.skip("the missed dates have been decided already (after the test run)")
+    form = {"decided_by": "desk-lead (test)", "note": "test"}
+    form.update({f"decide_{r['request_id'].replace('-', '_')}": "Close: overtaken by another change" for r in missed})
+    rows = scoring_eng.call("applyDecideChoices", listed, [], form, {"run_id": "test-missed", "decided_at": NOW})
+    closed = db.execute("select changedesk.decide(%s::jsonb) as closed", (j(rows),)).fetchone()["closed"]
+    assert sorted(c["request_id"] for c in closed) == MISSED
+    assert {c["reason"] for c in closed} == {"Overtaken by another change."}
+    assert {row(db, x)["status"] for x in MISSED} == {"Closed"}
+    db.execute("set constraints all immediate")
 
 
 def test_r16_do_next_merge_and_close_and_a_close_drafts_a_message(db, scoring_eng, drafter_eng):
@@ -433,9 +477,12 @@ def test_r16_only_an_item_on_the_list_can_be_decided(db):
 
 
 def test_r16_nothing_can_be_sent(db):
-    """No outbox, no send function, and no way for the app to approve a draft: drafts only."""
+    """Stages 2 to 4: drafts only. From stage 5 a person approves a draft through approve_updates, the one function that
+    can, and an approved update goes to the outbox table (tests/test_updates_db.py). There is still no function that
+    sends, and the app's login can neither approve a draft nor fill the outbox by hand."""
     fns = {r["proname"] for r in desk_db.rows(db, "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace "
                                                   "where n.nspname = 'changedesk' and has_function_privilege(p.oid, 'execute')")}
-    assert not any(w in f for f in fns for w in ("send", "approve", "outbox", "email"))
+    assert not any(w in f for f in fns for w in ("send", "email", "mail", "post_", "notify"))
+    assert {f for f in fns if "approve" in f or "outbox" in f} == {"approve_updates"}
     with pytest.raises(Exception, match="permission denied"):
         db.execute("update changedesk.updates set status = 'approved', approved_by = 'x'")

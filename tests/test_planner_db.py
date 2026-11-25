@@ -108,10 +108,13 @@ def test_r14_changing_a_setting_in_the_table_changes_the_next_plan(db):
     def small_hours():
         st = desk_state.load(db)
         return sum(s.hours for s in P.plan_week(st.items, WEEK, st.plan_settings()).segments if s.step == "small")
+    # The share as the store holds it: 0.20 at the start, 0.225 since Israel's decision of 25/11/2026 (9 hours of 40).
+    share = float(db.execute("select changedesk.setting_num('small_share') as s").fetchone()["s"])
+    week = float(db.execute("select changedesk.setting_num('hours_per_week') as h").fetchone()["h"])
     before = small_hours()
-    db.execute("select changedesk.set_setting('small_share', '0.1'::jsonb, 'desk-lead (test)', 'R14 test, rolled back')")
+    db.execute("select changedesk.set_setting('small_share', %s::jsonb, 'desk-lead (test)', 'R14 test, rolled back')", (j(share / 2),))
     after = small_hours()
-    assert (before, after) == (8, 4)
+    assert abs(before - week * share) < 0.06 and abs(after - week * share / 2) < 0.06, (before, after, week, share)
     who = desk_db.rows(db, "select changed_by, why from changedesk.settings_history where key = 'small_share' order by id desc limit 1")[0]
     assert who == {"changed_by": "desk-lead (test)", "why": "R14 test, rolled back"}
 
@@ -134,9 +137,9 @@ def run(db, runs=120):
     return st, ps, sim, rows, lanes
 
 
-def log(db, rid, rows, lanes, drafts=(), purpose="forecast"):
+def log(db, rid, rows, lanes, drafts=(), purpose="forecast", made_at=NOW):
     run_ = {"run_id": rid, "purpose": purpose, "start_week": WEEK.isoformat(), "rule": "lanes", "runs": 120, "horizon_weeks": 26, "seed": 163,
-            "load": 1.0, "safe_start_days": 7, "settings": {}, "made_by": "test", "made_at": NOW, "stamp": f"changedesk {rid} | test"}
+            "load": 1.0, "safe_start_days": 7, "settings": {}, "made_by": "test", "made_at": made_at, "stamp": f"changedesk {rid} | test"}
     return db.execute("select changedesk.log_forecast(%s::jsonb, %s::jsonb, %s::jsonb) as n", (j(run_), j(rows + lanes), j(list(drafts)))).fetchone()["n"]
 
 
@@ -152,9 +155,15 @@ def test_r18_every_open_item_gets_a_range_a_service_level_or_a_chance(db):
         log(db, "fc-test-2", rows[1:], lanes)
 
 
-def test_r20_a_small_change_drafts_nothing_and_a_large_one_drafts_an_update(db):
+def triggers_of(run_id, prev_id, found):
+    return [{"run_id": run_id, "previous_run_id": prev_id, "request_id": r["request_id"]} for r, _ in found]
+
+
+def test_r20_a_small_change_triggers_nothing_and_a_large_one_triggers_updates(db):
+    """R20, as stage 5 runs it: the trigger's rows are written by changedesk.log_updates, which works each one out again
+    from the two runs' forecasts rows. The updates themselves are drafted behind them (tests/test_updates_db.py)."""
     st, ps, sim, rows, lanes = run(db)
-    log(db, "fc-test-a", rows, lanes)
+    log(db, "fc-test-a", rows, lanes, made_at="2026-11-25T01:00:00Z")
     prev = {r["request_id"]: r["p85"] for r in rows if r["request_id"]}
     # A small change: one standard item's readiness goes up by one point.
     rid = next(r["request_id"] for r in rows if r["lane"] == "standard")
@@ -168,18 +177,32 @@ def test_r20_a_small_change_drafts_nothing_and_a_large_one_drafts_an_update(db):
     _, _, _, rows3, lanes3 = run(db)
     large = F.triggers(prev, rows3, 7)
     assert len(small) <= 1 and len(large) >= 10, (len(small), len(large))
-    info = {r["request_id"]: r for r in st.rows.values()}
-    drafts = [F.update_draft(r, old, info[r["request_id"]], "fc-test-b", NOW, 7) for r, old in large]
-    log(db, "fc-test-b", rows3, lanes3, drafts)
-    u = desk_db.rows(db, "select status, kind, audience, forecast_run_id, approved_by from changedesk.updates where run_id = 'fc-test-b'")
-    assert len(u) == len(drafts) and {(x["status"], x["kind"], x["audience"], x["forecast_run_id"], x["approved_by"]) for x in u} == {
-        ("draft", "status", "requester", "fc-test-b", None)}
+    log(db, "fc-test-b", rows3, lanes3, made_at="2026-11-25T02:00:00Z")
+    db.execute("select changedesk.log_updates('[]'::jsonb, %s::jsonb, '[]'::jsonb, '[]'::jsonb)", (j(triggers_of("fc-test-b", "fc-test-a", large)),))
+    got = desk_db.rows(db, "select request_id, old_p85, new_p85, moved_days, why from changedesk.update_triggers where run_id = 'fc-test-b'")
+    assert len(got) == len(large)
+    assert all((g["why"] != "moved") or abs(g["moved_days"]) > 7 for g in got)
+    # A trigger that did not happen is refused: an item whose 85% date stayed put.
+    still = next(r for r in rows3 if r["request_id"] in prev and r["p85"] and prev[r["request_id"]] and r["p85"] == prev[r["request_id"]])
+    with pytest.raises(Exception, match="triggers nothing"):
+        db.execute("select changedesk.log_updates('[]'::jsonb, %s::jsonb, '[]'::jsonb, '[]'::jsonb)",
+                   (j([{"run_id": "fc-test-b", "previous_run_id": "fc-test-a", "request_id": still["request_id"]}]),))
 
 
-def test_r20_a_what_if_run_drafts_nothing(db):
+def test_r20_a_what_if_run_triggers_nothing(db):
     st, ps, sim, rows, lanes = run(db, 30)
-    info = {r["request_id"]: r for r in st.rows.values()}
-    draft = F.update_draft(next(r for r in rows if r["p85"]), date(2026, 1, 1), info[rows[0]["request_id"]], "wi-t", NOW, 7)
+    log(db, "fc-test-w0", rows, lanes, made_at="2026-11-25T01:00:00Z")
+    log(db, "wi-test", rows, lanes, purpose="what-if", made_at="2026-11-25T02:00:00Z")
+    rid = next(r["request_id"] for r in rows if r["request_id"] and r["p85"])
+    with pytest.raises(Exception, match="compares a forecast run with an earlier forecast run"):
+        db.execute("select changedesk.log_updates('[]'::jsonb, %s::jsonb, '[]'::jsonb, '[]'::jsonb)",
+                   (j([{"run_id": "wi-test", "previous_run_id": "fc-test-w0", "request_id": rid}]),))
+
+
+def test_r20_a_what_if_run_takes_no_draft_either(db):
+    st, ps, sim, rows, lanes = run(db, 30)
+    draft = {"update_id": "U-wi-t", "request_id": rows[0]["request_id"], "subject": "s", "body": "b", "drafted_by": "test",
+             "drafted_at": NOW, "draft_problems": "", "stamp": "changedesk U-wi-t | test"}
     with pytest.raises(Exception, match="what-if run drafts no updates"):
         log(db, "wi-test", rows, lanes, [draft], purpose="what-if")
 

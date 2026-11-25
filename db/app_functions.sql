@@ -318,7 +318,7 @@ begin
       insert into changedesk.status_history (request_id, from_status, to_status, changed_at, changed_by, note, stamp)
       values (req.request_id, req.status, 'Closed', at, who, trim(d ->> 'reason'), d ->> 'stamp');
       closed := closed || jsonb_build_object('request_id', req.request_id, 'title', req.title,
-        'requester_role', req.requester_role, 'lane', req.lane, 'arrived_on', req.arrived_at::date,
+        'requester_role', req.requester_role, 'lane', req.lane, 'arrived_on', req.arrived_at::date, 'due_date', req.due_date,
         'age_days', at::date - req.arrived_at::date, 'reason', trim(d ->> 'reason'), 'decision_id', d ->> 'decision_id',
         'decided_by', who);
     else
@@ -356,13 +356,18 @@ begin
   select h.handoff_id, h.run_id, h.request_id, h.from_agent, h.to_agent, h.asked, h.why, h.evidence, h.confidence, h.call_id
   from jsonb_to_recordset(handoffs) as h(handoff_id text, run_id text, request_id text, from_agent text, to_agent text,
     asked text, why text, evidence text, confidence numeric, call_id text);
-  insert into changedesk.updates (update_id, run_id, audience, kind, request_id, subject, body, call_id,
-    drafted_by, drafted_at, draft_problems, status, stamp)
-  select u.update_id, u.run_id, u.audience, u.kind, u.request_id, u.subject, u.body, u.call_id,
-    u.drafted_by, u.drafted_at, coalesce(u.draft_problems, ''), 'draft', u.stamp
-  from jsonb_to_recordset(drafts) as u(update_id text, run_id text, audience text, kind text, request_id text,
-    subject text, body text, call_id text, drafted_by text, drafted_at timestamptz, draft_problems text, stamp text);
+  -- From stage 5 a close draft also carries its facts (the request's id, title and the day it was asked, each with
+  -- its source row) and the figures found in its text, so its figures can be traced like an update's (R23).
+  insert into changedesk.updates (update_id, run_id, audience, kind, request_id, to_role, items, subject, body, call_id,
+    drafted_by, drafted_at, draft_problems, facts, figures, status, stamp)
+  select u.update_id, u.run_id, u.audience, u.kind, u.request_id, u.to_role, coalesce(u.items, '[]'::jsonb), u.subject, u.body, u.call_id,
+    u.drafted_by, u.drafted_at, coalesce(u.draft_problems, ''), coalesce(u.facts, '[]'::jsonb), coalesce(u.figures, '[]'::jsonb), 'draft', u.stamp
+  from jsonb_to_recordset(drafts) as u(update_id text, run_id text, audience text, kind text, request_id text, to_role text, items jsonb,
+    subject text, body text, call_id text, drafted_by text, drafted_at timestamptz, draft_problems text, facts jsonb, figures jsonb, stamp text);
   get diagnostics n = row_count;
+  if exists (select 1 from jsonb_to_recordset(drafts) as u(update_id text), changedesk.stale_facts(u.update_id) s) then
+    raise exception 'a close draft holds a fact that is not its row''s value';
+  end if;
   return n;
 end $$;
 
@@ -522,4 +527,179 @@ begin
   from jsonb_to_recordset(drafts) as u(update_id text, request_id text, subject text, body text, drafted_by text,
     drafted_at timestamptz, draft_problems text, stamp text);
   return n;
+end $$;
+
+-- ---------------------------------------------------------------- stage 5: the update drafter's output (R20, R22, R23)
+
+-- One run of scripts/draft_updates.py: its AI calls, the triggers it found, its drafts and its hand-offs to a
+-- person. Each trigger is worked out again here from the two runs' forecasts rows, so only a real one (the 85%
+-- date moved by more than update_trigger_days, or was gained or lost) is written. Each draft must sit behind a
+-- trigger of its forecast run; a requester's update must cover that requester's items only, at least one of them
+-- triggered; and every fact in a draft must be its source row's value now (stale_facts), so the drafter cannot
+-- bring in a figure the pipe does not hold. Drafts are drafts: nothing here approves or sends one.
+create or replace function changedesk.log_updates(calls jsonb, triggers jsonb, drafts jsonb, handoffs jsonb) returns integer
+language plpgsql security definer set search_path = changedesk, pg_temp as $$
+declare
+  t jsonb;
+  u jsonb;
+  new_run changedesk.forecast_runs%rowtype;
+  old_run changedesk.forecast_runs%rowtype;
+  o date;
+  nw date;
+  days integer := changedesk.setting_num('update_trigger_days')::integer;
+  bad text;
+  n integer := 0;
+begin
+  if jsonb_typeof(calls) <> 'array' or jsonb_typeof(triggers) <> 'array' or jsonb_typeof(drafts) <> 'array' or jsonb_typeof(handoffs) <> 'array' then
+    raise exception 'log_updates expects four JSON arrays';
+  end if;
+  insert into changedesk.run_log (call_id, run_id, step, source, request_id, case_id, update_id, model, model_served,
+    playbook_name, playbook_version, playbook_sha256, engine_version, output_valid, stop_reason, error,
+    input_tokens, output_tokens, latency_ms, api_request_id, called_at)
+  select c.call_id, c.run_id, 'updater', c.source, c.request_id, null, c.update_id, c.model, c.model_served,
+    c.playbook_name, c.playbook_version, c.playbook_sha256, c.engine_version, c.output_valid, c.stop_reason, c.error,
+    coalesce(c.input_tokens, 0), coalesce(c.output_tokens, 0), c.latency_ms, c.api_request_id, c.called_at
+  from jsonb_to_recordset(calls) as c(call_id text, run_id text, source text, request_id text, update_id text,
+    model text, model_served text, playbook_name text, playbook_version text, playbook_sha256 text,
+    engine_version text, output_valid boolean, stop_reason text, error text, input_tokens integer,
+    output_tokens integer, latency_ms integer, api_request_id text, called_at timestamptz);
+
+  for t in select * from jsonb_array_elements(triggers) loop
+    select * into new_run from changedesk.forecast_runs where run_id = t ->> 'run_id';
+    select * into old_run from changedesk.forecast_runs where run_id = t ->> 'previous_run_id';
+    if new_run.run_id is null or old_run.run_id is null or new_run.purpose <> 'forecast' or old_run.purpose <> 'forecast'
+       or old_run.made_at >= new_run.made_at then
+      raise exception 'a trigger compares a forecast run with an earlier forecast run';
+    end if;
+    if not exists (select 1 from changedesk.forecasts where run_id = new_run.run_id and request_id = t ->> 'request_id')
+       or not exists (select 1 from changedesk.forecasts where run_id = old_run.run_id and request_id = t ->> 'request_id') then
+      raise exception 'request % is not in both forecast runs', t ->> 'request_id';
+    end if;
+    select p85 into o from changedesk.forecasts where run_id = old_run.run_id and request_id = t ->> 'request_id';
+    select p85 into nw from changedesk.forecasts where run_id = new_run.run_id and request_id = t ->> 'request_id';
+    if not ((o is null) <> (nw is null) or (o is not null and abs(nw - o) > days)) then
+      raise exception 'request %: its 85%% date did not move by more than % days (% to %), so it triggers nothing', t ->> 'request_id', days, o, nw;
+    end if;
+    insert into changedesk.update_triggers (run_id, previous_run_id, request_id, old_p85, new_p85, moved_days, why)
+    values (new_run.run_id, old_run.run_id, t ->> 'request_id', o, nw, case when o is not null and nw is not null then nw - o end,
+      case when o is null then 'gained a date' when nw is null then 'lost its date' else 'moved' end)
+    on conflict (run_id, request_id) do nothing;
+  end loop;
+
+  for u in select * from jsonb_array_elements(drafts) loop
+    if coalesce(u ->> 'stamp', '') not like 'changedesk %' or length(trim(coalesce(u ->> 'drafted_by', ''))) = 0 then
+      raise exception 'draft % carries no who-decided stamp', u ->> 'update_id';
+    end if;
+    if not exists (select 1 from changedesk.update_triggers where run_id = u ->> 'forecast_run_id') then
+      raise exception 'draft % is not behind a trigger of forecast run %', u ->> 'update_id', u ->> 'forecast_run_id';
+    end if;
+    if u ->> 'audience' = 'requester' then
+      if jsonb_array_length(coalesce(u -> 'items', '[]'::jsonb)) = 0 then
+        raise exception 'requester update % covers no items', u ->> 'update_id';
+      end if;
+      select string_agg(x, ', ') into bad from jsonb_array_elements_text(u -> 'items') x
+      where not exists (select 1 from changedesk.requests r where r.request_id = x and r.requester_role = u ->> 'to_role');
+      if bad is not null then
+        raise exception 'requester update % names items that are not %''s: %', u ->> 'update_id', u ->> 'to_role', bad;
+      end if;
+      if not exists (select 1 from jsonb_array_elements_text(u -> 'items') x
+                     join changedesk.update_triggers g on g.request_id = x and g.run_id = u ->> 'forecast_run_id') then
+        raise exception 'requester update % covers no item the trigger named', u ->> 'update_id';
+      end if;
+    end if;
+    insert into changedesk.updates (update_id, run_id, audience, kind, request_id, to_role, items, subject, body, forecast_run_id,
+      call_id, drafted_by, drafted_at, draft_problems, facts, figures, coverage, status, stamp)
+    values (u ->> 'update_id', u ->> 'run_id', u ->> 'audience', 'status', nullif(u ->> 'request_id', ''), u ->> 'to_role',
+      coalesce(u -> 'items', '[]'::jsonb), u ->> 'subject', u ->> 'body', u ->> 'forecast_run_id', u ->> 'call_id', u ->> 'drafted_by',
+      (u ->> 'drafted_at')::timestamptz, coalesce(u ->> 'draft_problems', ''), coalesce(u -> 'facts', '[]'::jsonb),
+      coalesce(u -> 'figures', '[]'::jsonb), coalesce(u -> 'coverage', '[]'::jsonb), 'draft', u ->> 'stamp');
+    select string_agg(s.fact_id || ' (' || s.says || ')', '; ') into bad from changedesk.stale_facts(u ->> 'update_id') s;
+    if bad is not null then
+      raise exception 'draft % holds facts that are not their rows'' values: %', u ->> 'update_id', bad;
+    end if;
+    n := n + 1;
+  end loop;
+
+  insert into changedesk.agent_handoffs (handoff_id, run_id, request_id, from_agent, to_agent, asked, why, evidence, confidence, call_id)
+  select h.handoff_id, h.run_id, h.request_id, h.from_agent, h.to_agent, h.asked, h.why, h.evidence, h.confidence, h.call_id
+  from jsonb_to_recordset(handoffs) as h(handoff_id text, run_id text, request_id text, from_agent text, to_agent text,
+    asked text, why text, evidence text, confidence numeric, call_id text);
+  return n;
+end $$;
+
+-- ---------------------------------------------------------------- stage 5: a person approves each update (R24)
+
+-- From the approval form (n8n "Change Desk: approve updates"): each row approves or rejects one draft, with the
+-- person's name, a reason for a rejection, and a stamp. Approval is refused for a draft with problems (the code
+-- checks found some), or whose facts no longer match their rows (the pipe changed: draft it again), and for a
+-- decider that is one of the build's agents. An approved update is placed in the outbox with its approval
+-- decision; nothing is sent. Close messages from the decide list (stage 2) are approved here too.
+create or replace function changedesk.approve_updates(rows jsonb) returns jsonb
+language plpgsql security definer set search_path = changedesk, pg_temp as $$
+declare
+  d jsonb;
+  upd changedesk.updates%rowtype;
+  who text;
+  at timestamptz;
+  stale text;
+  role_to text;
+  approved jsonb := '[]'::jsonb;
+  rejected jsonb := '[]'::jsonb;
+begin
+  if jsonb_typeof(rows) <> 'array' then
+    raise exception 'approve_updates expects a JSON array';
+  end if;
+  for d in select * from jsonb_array_elements(rows) loop
+    who := nullif(regexp_replace(trim(coalesce(d ->> 'decided_by', '')), '\s+', ' ', 'g'), '');
+    at := (d ->> 'decided_at')::timestamptz;
+    if who is null or at is null or coalesce(d ->> 'stamp', '') not like 'changedesk %' then
+      raise exception 'an approval needs who decided, when, and a stamp';
+    end if;
+    if lower(who) in ('triage_agent', 'message_drafter', 'update_drafter', 'update trigger (template, no ai)',
+                      'forecast (plain script)', 'planner (plain script)') then
+      raise exception '% is one of the build''s agents: a person approves', who;
+    end if;
+    select * into upd from changedesk.updates where update_id = d ->> 'update_id' for update;
+    if upd.update_id is null then
+      raise exception 'no update %', d ->> 'update_id';
+    end if;
+    if upd.status <> 'draft' then
+      raise exception 'update % is % already', upd.update_id, upd.status;
+    end if;
+    if d ->> 'action' = 'approved' then
+      if upd.draft_problems <> '' then
+        raise exception 'update % has draft problems (%): it can only be rejected', upd.update_id, upd.draft_problems;
+      end if;
+      select string_agg(s.fact_id || ' ' || s.says || ': drafted ' || coalesce(s.drafted, 'none') || ', now ' || coalesce(s.now, 'none'), '; ')
+        into stale from changedesk.stale_facts(upd.update_id) s;
+      if stale is not null then
+        raise exception 'update % no longer matches the pipe (%): reject it and draft it again', upd.update_id, stale;
+      end if;
+      role_to := coalesce(upd.to_role, (select r.requester_role from changedesk.requests r where r.request_id = upd.request_id));
+      insert into changedesk.decisions (decision_id, run_id, request_id, kind, action, detail, decided_by, decided_at, note, stamp)
+      values (d ->> 'decision_id', d ->> 'run_id', upd.request_id, 'update', 'approved',
+        jsonb_build_object('update_id', upd.update_id, 'audience', upd.audience, 'to_role', role_to), who, at,
+        trim(coalesce(d ->> 'note', '')), d ->> 'stamp');
+      update changedesk.updates set status = 'approved', approved_by = who, approved_at = at, decision_id = d ->> 'decision_id'
+      where update_id = upd.update_id;
+      insert into changedesk.outbox (outbox_id, update_id, decision_id, audience, to_role, subject, body, approved_by, approved_at, stamp)
+      values ('O-' || upd.update_id, upd.update_id, d ->> 'decision_id', upd.audience, role_to, upd.subject, upd.body, who, at, d ->> 'stamp');
+      approved := approved || to_jsonb(upd.update_id);
+    elsif d ->> 'action' = 'rejected' then
+      if length(trim(coalesce(d ->> 'reason', ''))) = 0 then
+        raise exception 'a rejection of % needs a reason', upd.update_id;
+      end if;
+      insert into changedesk.decisions (decision_id, run_id, request_id, kind, action, detail, decided_by, decided_at, note, stamp)
+      values (d ->> 'decision_id', d ->> 'run_id', upd.request_id, 'update', 'rejected',
+        jsonb_build_object('update_id', upd.update_id, 'audience', upd.audience, 'reason', trim(d ->> 'reason')), who, at,
+        trim(coalesce(d ->> 'note', '')), d ->> 'stamp');
+      update changedesk.updates set status = 'rejected', approved_by = who, approved_at = at, decision_id = d ->> 'decision_id'
+      where update_id = upd.update_id;
+      rejected := rejected || to_jsonb(upd.update_id);
+    else
+      raise exception 'unknown approval action %', d ->> 'action';
+    end if;
+  end loop;
+  return jsonb_build_object('approved', approved, 'rejected', rejected, 'outbox', (select coalesce(jsonb_agg('O-' || x), '[]'::jsonb)
+                                                                                     from jsonb_array_elements_text(approved) x));
 end $$;

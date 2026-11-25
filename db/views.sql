@@ -85,20 +85,47 @@ select * from changedesk.ranked_standard(current_date);
 -- Open items past their lane's age limit (settings age_limit_days_small and _standard). Each is
 -- decided: do it next, merge it, or close it with a reason. An item with a standing "do it next"
 -- has been decided and leaves the list.
+--
+-- Build addition to R16 (Israel's decision, 25/11/2026): a fixed-date item whose date has passed goes
+-- on the list at once, whatever its age, and first: the date was the reason for its lane, so a person
+-- says whether it is still needed. Work already started counts too (In progress), because the reason
+-- for doing it may have gone. For these rows age_limit_days is null, days_over is the days since the
+-- date, and why says which rule put the item there.
+do $$
+begin
+  -- The result gained two columns in stage 5 (due_date, why). A function's result cannot be changed in
+  -- place, so the old one is dropped once, with the two views that read it (both are made again below).
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'changedesk' and p.proname = 'decide_list_at' and not ('why' = any (coalesce(p.proargnames, '{}')))) then
+    drop function changedesk.decide_list_at(date) cascade;
+  end if;
+end $$;
+
 create or replace function changedesk.decide_list_at(as_of date) returns table (
   request_id text, title text, lane text, status text, requester_role text, playbook text,
-  arrived_on date, age_days integer, age_limit_days integer, days_over integer, score numeric)
+  arrived_on date, age_days integer, age_limit_days integer, days_over integer, score numeric,
+  due_date date, why text)
 language sql stable set search_path = changedesk, pg_temp as $$
-  select r.request_id, r.title, r.lane, r.status, r.requester_role, r.playbook, r.arrived_at::date,
-    (as_of - r.arrived_at::date), lim.days, (as_of - r.arrived_at::date) - lim.days, t.score
-  from changedesk.requests r
-  cross join lateral (
-    select changedesk.setting_num(case r.lane when 'small' then 'age_limit_days_small' else 'age_limit_days_standard' end)::integer as days
-  ) lim
-  left join changedesk.score_totals t on t.request_id = r.request_id
-  where r.lane in ('small', 'standard') and r.status in ('Triaged', 'Planned') and not r.do_next
-    and (as_of - r.arrived_at::date) > lim.days
-  order by (as_of - r.arrived_at::date) - lim.days desc, r.request_id
+  select * from (
+    select r.request_id, r.title, r.lane, r.status, r.requester_role, r.playbook, r.arrived_at::date,
+      (as_of - r.arrived_at::date), lim.days, (as_of - r.arrived_at::date) - lim.days, t.score,
+      null::date, 'past the age limit'::text
+    from changedesk.requests r
+    cross join lateral (
+      select changedesk.setting_num(case r.lane when 'small' then 'age_limit_days_small' else 'age_limit_days_standard' end)::integer as days
+    ) lim
+    left join changedesk.score_totals t on t.request_id = r.request_id
+    where r.lane in ('small', 'standard') and r.status in ('Triaged', 'Planned') and not r.do_next
+      and (as_of - r.arrived_at::date) > lim.days
+    union all
+    select r.request_id, r.title, r.lane, r.status, r.requester_role, r.playbook, r.arrived_at::date,
+      (as_of - r.arrived_at::date), null::integer, (as_of - r.due_date), t.score, r.due_date, 'its fixed date has passed'
+    from changedesk.requests r
+    left join changedesk.score_totals t on t.request_id = r.request_id
+    where r.lane = 'fixed_date' and r.status in ('Triaged', 'Planned', 'In progress') and not r.do_next
+      and r.due_date < as_of
+  ) l
+  order by (l.lane = 'fixed_date') desc, 10 desc, 1
 $$;
 
 create or replace view changedesk.decide_list as
@@ -135,6 +162,18 @@ select r.request_id, r.lane, r.arrived_at, r.due_date,
 from changedesk.requests r
 where r.lane is not null;
 
+-- A setting's value as it stood on a day: the last value set on or before it, from settings_history (stage 5). Before the
+-- first change it is the starting value, which held from the start of the history. Used where a past week must be read
+-- with the setting of that week (the urgent buffer was 4 hours at 40 hours a week; 3.6 from 25/11/2026 at 36).
+create or replace function changedesk.setting_num_at(k text, on_day date) returns numeric
+language sql stable set search_path = changedesk, pg_temp as $$
+  select coalesce(
+    (select (h.value #>> '{}')::numeric from changedesk.settings_history h
+      where h.key = k and h.changed_at::date <= on_day order by h.changed_at desc, h.id desc limit 1),
+    (select (h.value #>> '{}')::numeric from changedesk.settings_history h where h.key = k order by h.changed_at, h.id limit 1),
+    changedesk.setting_num(k))
+$$;
+
 -- R15 is built and checked in stage 3; this view gives it the figures. For each lane and each
 -- week since work was first logged: in, out, open at the end of the week, the oldest open age,
 -- items past the age limit, fixed dates due that week and met, and urgent hours beyond the buffer.
@@ -163,7 +202,7 @@ select g.lane, g.week_start,
      and e.due_date >= g.week_start and e.due_date < g.week_end) as fixed_dates_due,
   (select count(*) from changedesk.request_ends e where g.lane = 'fixed_date' and e.lane = 'fixed_date'
      and e.due_date >= g.week_start and e.due_date < g.week_end and e.done_at::date <= e.due_date) as fixed_dates_met,
-  (select greatest(0, coalesce(sum(wl.hours), 0) - changedesk.setting_num('hours_per_week') * changedesk.setting_num('urgent_buffer_share'))
+  (select greatest(0, coalesce(sum(wl.hours), 0) - changedesk.setting_num_at('hours_per_week', g.week_end) * changedesk.setting_num_at('urgent_buffer_share', g.week_end))
      from changedesk.work_log wl join changedesk.requests r on r.request_id = wl.request_id
     where g.lane = 'urgent' and r.lane = 'urgent' and wl.week_start = g.week_start) as urgent_hours_beyond_buffer
 from grid g
@@ -213,3 +252,111 @@ select c.call_id, c.run_id, c.source, c.request_id, c.model, c.model_served, c.p
 from changedesk.call_cost c
 left join changedesk.requests r on r.request_id = c.request_id
 where c.step = 'triage';
+
+-- ---------------------------------------------------------------- stage 5: where each figure in an update comes from (R23)
+
+-- One fact's value, read again from its source row. A source names a table or view, a filter and a column, and
+-- may count or add up the rows it filters: {"table": "forecasts", "where": {"run_id": "fc-...", "request_id":
+-- "CD-0016"}, "column": "p85"}, {"table": "week_plan", "where": {"plan_id": "...", "lane": "small"}, "agg": "sum",
+-- "column": "hours"}, {"table": "decide_list_at", "as_of": "2026-11-25", "where": {"why": "..."}, "agg": "count"}.
+-- Only the tables and columns listed here can be read, every name is quoted as a name and every value as a value,
+-- so a source cannot be made into other SQL. A plain value must come from exactly one row. The value comes back as
+-- text in one form: dates as YYYY-MM-DD, numbers without trailing zeros, true or false. The update drafter's
+-- facts are filled from this function, log_updates refuses a fact that does not match it, approve_updates refuses
+-- an update whose facts no longer match it, and scripts/check_updates.py prints it for every figure.
+create or replace function changedesk.fact_value(src jsonb) returns text
+language plpgsql stable set search_path = changedesk, pg_temp as $$
+declare
+  readable constant jsonb := '{
+    "requests": ["request_id", "title", "lane", "status", "requester_role", "due_date", "size_hours", "goal_id", "do_next", "arrived_at"],
+    "forecasts": ["run_id", "request_id", "lane", "kind", "p50", "p85", "p95", "service_level_days", "chance", "latest_safe_start",
+                  "hours_in_per_week", "hours_out_per_week", "growing", "finished_share"],
+    "forecast_runs": ["run_id", "purpose", "start_week", "runs", "horizon_weeks", "seed", "made_at"],
+    "settings": ["key", "value", "changed_by", "changed_at"],
+    "settings_history": ["id", "key", "value", "changed_by", "changed_at"],
+    "week_plan": ["plan_id", "week_start", "lane", "request_id", "hours"],
+    "update_triggers": ["run_id", "previous_run_id", "request_id", "old_p85", "new_p85", "moved_days", "why"],
+    "lane_health": ["lane", "week_start", "arrived", "finished", "open_at_end", "oldest_open_days", "past_age_limit",
+                    "fixed_dates_due", "fixed_dates_met", "urgent_hours_beyond_buffer"],
+    "decide_list_at": ["request_id", "lane", "status", "why", "age_days", "days_over", "due_date"],
+    "awaiting_confirmation": ["request_id", "lane"],
+    "goals": ["goal_id", "title"]
+  }'::jsonb;
+  t text := src ->> 'table';
+  col text := src ->> 'column';
+  agg text := coalesce(src ->> 'agg', 'value');
+  from_sql text;
+  where_sql text := '';
+  expr text;
+  k text;
+  v jsonb;
+  n bigint;
+  out text;
+begin
+  if jsonb_typeof(src) is distinct from 'object' or t is null or not (readable ? t) then
+    raise exception 'fact source: % is not a table a fact may read', coalesce(t, 'nothing');
+  end if;
+  if agg not in ('value', 'count', 'sum', 'min', 'max') then
+    raise exception 'fact source: % is not a way to read rows', agg;
+  end if;
+  if agg <> 'count' and (col is null or not (readable -> t ? col)) then
+    raise exception 'fact source: % has no column % a fact may read', t, coalesce(col, '(none)');
+  end if;
+  for k, v in select * from jsonb_each(coalesce(src -> 'where', '{}'::jsonb)) loop
+    if not (readable -> t ? k) then
+      raise exception 'fact source: % cannot be filtered on %', t, k;
+    end if;
+    where_sql := where_sql || ' and ' || case
+      when jsonb_typeof(v) = 'null' then format('%I is null', k)
+      when jsonb_typeof(v) = 'array' then format('%I::text = any (%L::text[])', k, (select array_agg(x) from jsonb_array_elements_text(v) x))
+      else format('%I::text = %L', k, v #>> '{}') end;
+  end loop;
+  from_sql := case when t = 'decide_list_at' then format('changedesk.decide_list_at(%L::date)', src ->> 'as_of')
+                   else format('changedesk.%I', t) end;
+  if t = 'decide_list_at' and (src ->> 'as_of') is null then
+    raise exception 'fact source: decide_list_at needs the date it was read as of';
+  end if;
+  if agg <> 'count' then
+    expr := case
+      when col = 'value' and t in ('settings', 'settings_history') and src ? 'index' then format('(value #>> %L)', '{' || (src ->> 'index')::integer || '}')
+      when col = 'value' and t in ('settings', 'settings_history') then '(value #>> ''{}'')'
+      when src ->> 'cast' = 'date' then format('((%I) at time zone ''UTC'')::date::text', col)
+      else format('(%I)::text', col) end;
+  end if;
+  if agg = 'value' then
+    execute format('select count(*) from %s where true%s', from_sql, where_sql) into n;
+    if n <> 1 then
+      raise exception 'fact source: % rows in % match, not one', n, t;
+    end if;
+    execute format('select %s from %s where true%s', expr, from_sql, where_sql) into out;
+  elsif agg = 'count' then
+    execute format('select count(*)::text from %s where true%s', from_sql, where_sql) into out;
+  else
+    execute format('select %s(%I)::text from %s where true%s', agg, col, from_sql, where_sql) into out;
+  end if;
+  if out ~ '^-?[0-9]+\.[0-9]+$' then
+    out := regexp_replace(regexp_replace(out, '0+$', ''), '\.$', '');
+  end if;
+  return out;
+end $$;
+
+-- The facts of one update whose value no longer matches its row (the pipe has changed since the draft), or whose
+-- row cannot be read. An update with any is refused at approval: it must be drafted again.
+create or replace function changedesk.stale_facts(uid text) returns table (fact_id text, says text, drafted text, now text)
+language plpgsql stable set search_path = changedesk, pg_temp as $$
+declare
+  f jsonb;
+  cur text;
+begin
+  for f in select x from changedesk.updates u, jsonb_array_elements(u.facts) x where u.update_id = uid loop
+    begin
+      cur := changedesk.fact_value(f -> 'source');
+    exception when others then
+      cur := 'cannot be read: ' || sqlerrm;
+    end;
+    if cur is distinct from f ->> 'value' then
+      fact_id := f ->> 'id'; says := f ->> 'says'; drafted := f ->> 'value'; now := cur;
+      return next;
+    end if;
+  end loop;
+end $$;

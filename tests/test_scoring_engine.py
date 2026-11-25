@@ -77,6 +77,21 @@ def test_r16_the_decide_form_offers_do_next_merge_and_close(scoring_eng):
         scoring_eng.call("buildDecideForm", [], OPEN, {})
 
 
+def test_r16_build_addition_the_form_says_a_fixed_date_has_passed(scoring_eng):
+    """A fixed-date item past its date is on the list whatever its age (Israel, 25/11/2026); the form says why it is there."""
+    missed = {"request_id": "CD-0060", "title": "Seat count for the renewal on 27/10/2026", "lane": "fixed_date", "status": "Planned",
+              "requester_role": "Billing specialist", "playbook": "crm-licence-seat-management", "age_days": 64, "age_limit_days": None,
+              "days_over": 29, "score": 6.1, "due_date": "2026-10-27", "why": "its fixed date has passed"}
+    fields = scoring_eng.call("buildDecideForm", [missed] + DECIDE, OPEN, {"run_id": "n8n-9"})
+    assert "2 past their lane's age limit, 1 past their fixed date" in fields[0]["html"]
+    assert "due 2026-10-27: its date passed 29 days ago (asked 64 days ago)" in fields[0]["html"]
+    label = next(f["fieldLabel"] for f in fields if f.get("fieldName") == "decide_CD_0060")
+    assert label.endswith("(its date passed 29 days ago)")
+    opts = next(f for f in fields if f.get("fieldName") == "decide_CD_0060")["fieldOptions"]["values"]
+    assert "Close: overtaken by another change" in [o["option"] for o in opts]
+    assert scoring_eng.call("datePassed", DECIDE[0]) is False
+
+
 def test_r16_choices_become_stamped_rows_and_a_close_has_a_reason(scoring_eng):
     form = {"decided_by": "desk-lead", "decide_CD_0029": "Close: no longer needed", "decide_CD_0016": "Merge into CD-0140 (Clean up duplicate Account records)",
             "note": "Agreed at the desk review."}
@@ -135,8 +150,10 @@ def test_the_promise_check_reads_one_sentence_at_a_time(drafter_eng, text, promi
 
 # ---------------------------------------------------------------- the message drafter
 
+# arrived_on as changedesk.decide gives it: the UTC date of arrived_at (2026-08-30T21:53Z, 31 August in Sydney). It was
+# 2026-08-31 here until stage 5's figure check found that the test-run draft's "30 August 2026" did not match it.
 CLOSED = {"request_id": "CD-0029", "title": "Two-minute guide to merging Opportunity records", "requester_role": "Support lead",
-          "arrived_on": "2026-08-31", "age_days": 86, "reason": "No longer needed.", "decision_id": "D-r-CD-0029", "decided_by": "desk-lead"}
+          "arrived_on": "2026-08-30", "age_days": 86, "reason": "No longer needed.", "decision_id": "D-r-CD-0029", "decided_by": "desk-lead"}
 
 
 def test_the_drafter_sees_no_score_lane_or_request_text(drafter_eng):
@@ -154,8 +171,12 @@ def test_r16_a_good_draft_is_logged_as_a_draft_with_a_stamp(drafter_eng):
     out = drafter_eng.call("checkCloseDraft", CLOSED, fake_claude(good), {"run_id": "n8n-9", "model": "claude-haiku-5-5", "now": "2026-11-25T04:01:00Z"})
     d = out["draft"]
     assert d["audience"] == "requester" and d["kind"] == "close" and d["draft_problems"] == ""
-    assert d["stamp"] == "changedesk U-n8n-9-CD-0029 | claude-haiku-5-5 | close-message@1.0.1 | drafted by message_drafter | 2026-11-25T04:01:00Z"
+    assert d["stamp"] == "changedesk U-n8n-9-CD-0029 | claude-haiku-5-5 | close-message@1.0.2 | drafted by message_drafter | 2026-11-25T04:01:00Z"
     assert out["handoff"]["to_agent"] == "message_drafter" and out["call"]["step"] == "drafter"
+    # Stage 5 (R23): the draft carries the facts of its record, each with its source row, and every figure is traced.
+    assert [(f["kind"], f["source"]["column"]) for f in d["facts"]] == [("id", "request_id"), ("text", "title"), ("date", "arrived_at")]
+    assert d["to_role"] == "Support lead" and d["items"] == ["CD-0029"]
+    assert [(f["text"], f["fact_id"]) for f in d["figures"]] == [("CD-0029", "F1"), ("CD-0029", "F1")]
 
 
 @pytest.mark.parametrize("body,problem", [
@@ -163,6 +184,9 @@ def test_r16_a_good_draft_is_logged_as_a_draft_with_a_stamp(drafter_eng):
     ("We closed CD-0029. We will deliver it next week instead.", "makes a promise"),
     ("We closed CD-0029. Write to help@desk.example with questions.", "contact details"),
     ("We closed the guide request. Send a new request if needed.", "does not name the request id"),
+    ("We closed CD-0029 after 86 days of waiting. Send a new request if needed.", 'figures with no source in the record: "86"'),
+    ("We closed CD-0029, asked on 31 August 2026. Send a new request if needed.", 'figures with no source in the record: "31 August 2026"'),
+    ("We closed CD-0029 and three others. Send a new request if needed.", 'figures with no source in the record: "three"'),
 ])
 def test_the_draft_check_catches_what_a_requester_must_not_get(drafter_eng, body, problem):
     problems = drafter_eng.call("draftProblems", CLOSED, {"subject": "Closed", "body": body})
@@ -172,3 +196,14 @@ def test_the_draft_check_catches_what_a_requester_must_not_get(drafter_eng, body
 def test_a_failed_draft_call_gives_no_draft(drafter_eng):
     out = drafter_eng.call("checkCloseDraft", CLOSED, {"error": {"message": "overloaded", "status": 529}}, {"run_id": "r", "model": "m"})
     assert out["draft"] is None and out["call"]["output_valid"] is False and out["call"]["error"]
+
+
+def test_r23_a_missed_dates_close_message_may_write_out_the_date_in_its_title(drafter_eng):
+    """The test run closes CD-0060 ("Seat count for the renewal on 27/10/2026"); its close message may say 27 October 2026."""
+    closed = dict(CLOSED, request_id="CD-0060", title="Seat count for the renewal on 27/10/2026", arrived_on="2026-09-22", due_date="2026-10-27",
+                  reason="Overtaken by another change.")
+    body = ("Hello, Billing specialist. We have closed CD-0060, the seat count for the renewal on 27 October 2026, asked on 22 September "
+            "2026, because it was overtaken by another change. If the need comes back, please raise a new request through the desk's intake form.")
+    assert drafter_eng.call("draftProblems", closed, {"subject": "Your request CD-0060 has been closed", "body": body}) == []
+    facts = drafter_eng.call("closeFacts", closed)
+    assert facts[-1]["source"] == {"table": "requests", "where": {"request_id": "CD-0060"}, "column": "due_date"}

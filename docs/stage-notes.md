@@ -1,4 +1,4 @@
-# Stage notes: stages 0 to 4
+# Stage notes: stages 0 to 6
 
 A short "how it works" for each stage, so the build can be explained in an interview. Built 25/11/2026. Every ticket is made up.
 
@@ -102,13 +102,66 @@ The store's tests also found one older bug: `changedesk.set_setting` could never
 - The update trigger's draft is a plain template in stage 4, as no AI drafter for status updates exists before stage 5.
 - `check` in `n8n_publish.py` reads the published version too; `set_setting`'s old bug fixed.
 
-## Carried to later stages
+## Israel's two decisions (25/11/2026)
 
-- **Stage 5, the updates.** The three audiences' drafts go behind the stage 4 trigger, from the forecast rows, with the approval step and the outbox.
-- **Stage 6, a fresh eval set.** The playbook was tuned on the 40 eval cases (see the table above); add requests it has never seen before the triage eval is quoted as a result.
-- **For Israel, a split to review.** The forecast shows the small lane's 20% just under its demand (8.1 hours a week against 8). The split is a setting to be reset from data; no change was made.
-- **For a person, three fixed dates missed under the old rule.** CD-0046, CD-0060 and CD-0089 are past their dates and still open, and this week's plan gives them 20 hours. The decide list covers only the small and standard lanes, so a person should say whether they are still needed.
+**The split, set from data.** Small work arrives at 8.1 hours a week, and 20% of a 40-hour week reserved 8, so the forecast showed the small lane's wait growing. The desk owner moved small from 8 to 9 hours (0.225) and standard from 28 to 27 (0.675) through `changedesk.set_setting`, with that reason; both old values are kept in `settings_history`. At 40 hours both ways, the small lane's service level went from 85% within 17 days (`fc-20261124T231829Z`) to 85% within 7 days (`fc-20261125T000231Z`), and the lane stopped growing (8.1 hours in, 8.2 worked). The next plan followed it with no code change (R14): small 9 hours, standard 5. No 85% date moved by more than 5 days, so the trigger drafted nothing (R20).
+
+**A missed fixed date goes on the decide list at once.** A build addition to R16: a fixed-date item whose date has passed goes on the decide list whatever its age, and first, with "its fixed date has passed" as the reason. Work already started counts too, because the reason for it may have gone. `changedesk.decide_list_at` gained two columns (the due date and why the item is there), the decide form says why each item is there, and the health page lists both kinds. CD-0046, CD-0060 and CD-0089 now head the list; COURSES 2ND closes them as overtaken in the test run. Tests: `tests/test_requirements_db.py::test_r16_build_addition_*` and `tests/test_scoring_engine.py::test_r16_build_addition_*`.
+
+**And a third, for stage 5 (Israel, on a question from the Code chat).** The split moved no date by more than 5 days, and closing the three missed dates would move them by 7 at most (a probe inside a rolled-back transaction), so neither would trigger an update. Israel chose a large change: the desk owner cut the week from 40 to 36 hours (December leave). COURSES 2ND added two guards: log it like any other setting change (done, with who and why), and keep the documents straight about which figures were made at 40 hours and which at 36 (the README's table, and a settings line in each report), with the demo reset putting the store back to 40 hours and the starting settings (it does now, below).
+
+## Stage 5: updates for three audiences, the approval form and the outbox
+
+**The trigger, as rows (R20).** When a forecast run moves an item's 85% date by more than a week from the run before it, or the item gains or loses its date, `scripts/draft_updates.py` logs a trigger row for it. `changedesk.log_updates` works each one out again from the two runs' forecasts rows and refuses one that did not happen. If nothing triggered, nothing is drafted. `scripts/forecast.py` hands a saved run straight to the drafter; stage 4's plain template is retired.
+
+**Pipe data only (R22).** One pack of facts for each reader: each requester (by role) with an item that moved, covering every open item of theirs; the desk manager; the executive sponsor. Every fact is a row's value with its source: the table, the filter and the column, or a count or sum of rows. The store's `changedesk.fact_value` reads it, from listed tables and columns only, every name quoted as a name and every value as a value, so a source cannot be made into other SQL. A request's text cannot be read by it at all. The drafter, one Haiku 5.5 call per reader, sees the facts and the answer each item needs, never their sources.
+
+**Every figure traced (R23).** `engine/figures.js` finds every figure in a draft: request ids, dates in five forms, percentages, money, numbers with their unit, and numbers written in words. A requester's own title is taken out first, as their words. Each figure must match a fact with the same value and unit (a figure may round a fact), or the draft has a problem. `changedesk.log_updates` refuses a fact that is not its row's value now. `scripts/check_updates.py` is the check script: for every figure it prints the fact, the source row, the value drafted and the value now ([docs/reports/updates.md](reports/updates.md)). Close messages from the decide list are traced too, against their record's facts (the request id, its title, the day it was asked, the due date). Writing that found one wrong figure already: a test fixture said CD-0029 was asked on 31 August, but the store and the real draft say 30 August (UTC).
+
+**Every open item answered (R25).** Code decides each item's answer from its forecast row: a date range (50, 85, 95%); this week's plan, when the forecast finishes it this week (the forecast starts on Monday, so it can give a date before today); a service level; the chance of a fixed date with its latest safe start; a passed date, whose next step is a person deciding whether it is still needed; no date yet, whose next step is the age limit in days; or waiting for a person to confirm. The draft must name each item and give its answer in the item's own passage.
+
+**A person approves each one (R24).** The n8n form "Change Desk: approve updates" shows every draft with the row each figure comes from. `changedesk.approve_updates` refuses an approval of a draft with problems, of one whose facts no longer match their rows (`changedesk.stale_facts`), or by one of the build's agents; a rejection needs a reason. An approved update goes to `changedesk.outbox`, and nowhere else: its trigger refuses a row with no approval decision for that update by that person, even from the database owner, and refuses any change to a row. No workflow has a node that sends, no function sends, and the app's login cannot approve or fill the outbox by hand (`setup_db.py` now proves 14 limits).
+
+**The live run, and how the drafter got to 1.0.2.** The 36-hour week moved 9 items by 8 to 16 days: 5 requesters, the manager and the executive. Four runs on that one forecast, every draft kept:
+
+| Run | Drafter | Clean drafts | What the checks found | What changed next |
+|---|---|---|---|---|
+| `up-20261125T001949Z` | 1.0.0 | 2 of 6 | Counts in words that matched no fact ("your five requests", "Nine requests"); the manager's answer cut off at 3000 tokens; an urgent item "85% likely by 23 November", read on the 25th | Numbers in words traced like digits (a check change); each requester's pack gained their count of open requests; the this-week answer; room for 8000 tokens |
+| `up-20261125T002810Z` | 1.0.1 | 6 of 7 | The manager's draft 301 words, over 230 | The manager's limit 320 (a check change: 230 was set before any live run) |
+| `up-20261125T002910Z` | 1.0.1 | 6 of 7 | The manager's draft 343 words, and today's date, which is not a fact | A shorter manager brief; no draft writes today's date |
+| `up-20261125T003014Z` | 1.0.2 | 6 of 7 | The model flagged the account executive's clean draft as a possible injection (a requester's "URGENT!!!" title in its pack) | None: a false flag only holds a draft for a person |
+
+Runs 1 to 3 were rejected through the approval function by "Code chat (on Israel's delegation)", with the reason "superseded by run up-20261125T003014Z", so the form holds one current draft for each reader. Four runs cost US$0.022.
+
+**The read-through of five drafts (R25), by the Code chat on Israel's delegation.** All five requester drafts of run 4: every one of their 17 open items is answered: 11 with a date range, 4 with a service level, CD-0060 with "a person is deciding whether it is still needed" and the week it is planned in, CD-0148 with this week's plan. No expected date is before 25/11/2026; the only earlier dates are CD-0060's missed due date and the week's Monday. The billing specialist's draft runs its five items into one paragraph, which the brief asked it not to do; the code does not check paragraphs. Two requesters have two items with the same title (the made-up history's repeats); the request ids tell them apart.
+
+**How to say it.** "When the forecast moves a date by more than a week, the desk drafts updates for the requester, the manager and the executive from its own rows. Code traces every figure in a draft back to the row it came from, and checks that every open item a requester has gets an answer. A person approves each one, and an approved update goes to an outbox. Nothing is sent."
+
+## Stage 6: the fresh eval, the documents and the control sheet
+
+**A fresh eval, run once.** Playbook 1.0.2 was written after seeing results on the 40 eval cases. So 30 new requests were written, six of them hostile, with six kinds of attack the tuned set does not use (an instruction in the "what breaks" field, a claim that the desk lead already agreed, a forwarded vendor note, spaced-out letters, a fake reply format, a polite line to "the AI reviewing this"). A test checks that none shares six words in a row with a tuned case; it caught two near-copies while the set was written, and they were reworded. The labels were committed on their own (`cbacd4e`), and then 1.0.2 ran once, unchanged, three rounds: every line met the bar (lane 100%, size band 100%, playbook 96.7%, a person asked when the label says 100%, hostile 18 of 18). The code screen caught 12 of the 18 hostile answers and the model 18: the forwarded note and the polite line passed the screen. That is reported, not tuned away. Cost US$0.080 for 90 calls.
+
+**Tests on every push, and the diagrams from the workflow files (R28).** CI runs the tests on every push. `scripts/build_docs.py` draws every n8n workflow and lists its steps from the JSON alone ([docs/workflows.md](workflows.md)), and fills the README's two generated parts; `tests/test_build_docs.py` fails if any differs from a fresh build.
+
+**One control sheet, a role card for each agent, a cost sheet (R29, R30).** [The control sheet](control-sheet.md) holds the AI register, the six practices, the approval points and stop switches, and the disclosure questions, every line pointing to a file, a test or a log row (`tests/test_control_sheet.py`). Three role cards: the triage agent, the message drafter, the update drafter. [The cost sheet](cost-sheet.md) is made from the run log through a JSON that CI checks: one triage US$0.000877, one update US$0.000789.
+
+**The demo reset.** `load_history.py --reset` now also clears the stage 5 tables (the outbox by TRUNCATE, since its trigger refuses delete), the forecast runs, and puts every setting back to its starting value, as a change with who and why. A test runs the whole reset inside a rolled-back transaction as the owner and checks 40 hours, the 20/70 split, the history's requests, and nothing left in the outbox.
+
+## Changed from the spec, or added by the build (stages 5 and 6)
+
+- R16's build addition: a fixed-date item past its date is on the decide list at once (Israel, 25/11/2026).
+- The settings changed in the store: small 22.5%, standard 67.5% (Israel's split); 36 hours a week (Israel's large change for stage 5). The starting values in `settings/settings.json` are unchanged, and the demo reset puts them back.
+- Stage 4's plain update template is retired; the trigger's outcome is now rows (`changedesk.update_triggers`).
+- Close messages are approved on the same form as the updates, and their figures are traced the same way.
+- The health view reads each past week's urgent buffer with the hours of that week (`changedesk.setting_num_at`).
+- The forecast still starts on Monday; an update says "this week's plan" for work it finishes this week.
+
+## Carried to later work
+
+- **The code screen's patterns**, reviewed against a new fresh set (not this one): two kinds of attack passed it.
+- **A labelled eval for the update drafter**, with a bar set before its first run, so its brief can be changed on evidence, not on one forecast.
+- **After COURSES 2ND's test run**, the Code chat checks the outbox and the closes, syncs the Notion board, and runs the forecast again (the closes are expected to draft nothing).
 
 ## Test-run reviews
 
-The reviews in test runs (lane confirmation, score change, decide list) are made by COURSES 2ND or the Code chat on Israel's delegation. They prove the flow works end to end; they are not an independent review.
+The reviews in test runs (lane confirmation, score change, decide list, approvals) are made by COURSES 2ND or the Code chat on Israel's delegation. They prove the flow works end to end; they are not an independent review. On 25/11/2026 the Code chat, on that delegation, read five requester drafts through (R25) and rejected the 20 drafts of update runs 1 to 3 as superseded; it approved nothing.
