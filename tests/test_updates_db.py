@@ -233,24 +233,30 @@ def test_r24_an_update_the_pipe_has_overtaken_cannot_be_approved(stage5):
 
 def test_r24_the_outbox_takes_no_row_without_an_approval_even_from_the_owner():
     """As the database owner, inside a transaction that is rolled back: a row with no approval decision is refused, and so is
-    any change to a row that is there."""
-    no_approval = owner_sql("""
+    any change to a row that is there. The test makes its own draft, so it does not depend on what the store holds (after
+    the demo reset there is no draft at all)."""
+    own = """
+      insert into changedesk.updates (update_id, run_id, audience, kind, request_id, to_role, subject, body, drafted_by, drafted_at, status, stamp)
+      select 'U-owner-test', 'owner-test', 'requester', 'close', request_id, requester_role, 'Closed', 'A test message.', 'test', now(), 'draft',
+        'changedesk U-owner-test | test' from changedesk.requests order by request_id limit 1;"""
+    no_approval = owner_sql(own + """
       insert into changedesk.decisions (decision_id, run_id, request_id, kind, action, detail, decided_by, decided_at, note, stamp)
       select 'A-t', 't', request_id, 'update', 'rejected', jsonb_build_object('update_id', update_id), 'desk-lead', now(), '', 'changedesk A-t'
-      from changedesk.updates order by drafted_at limit 1;
+      from changedesk.updates where update_id = 'U-owner-test';
       insert into changedesk.outbox (outbox_id, update_id, decision_id, audience, to_role, subject, body, approved_by, approved_at, stamp)
-      select 'O-t', update_id, 'A-t', audience, 'Support lead', subject, body, 'desk-lead', now(), 'changedesk A-t'
-      from changedesk.updates order by drafted_at limit 1;""")
+      select 'O-t', update_id, 'A-t', audience, to_role, subject, body, 'desk-lead', now(), 'changedesk A-t'
+      from changedesk.updates where update_id = 'U-owner-test';""")
     assert no_approval.returncode != 0 and "has no approval row" in no_approval.stderr, no_approval.stderr
-    changed = owner_sql("""
-      update changedesk.updates set draft_problems = '' where update_id = (select update_id from changedesk.updates order by drafted_at limit 1);
+    changed = owner_sql(own + """
       insert into changedesk.decisions (decision_id, run_id, request_id, kind, action, detail, decided_by, decided_at, note, stamp)
       select 'A-t', 't', request_id, 'update', 'approved', jsonb_build_object('update_id', update_id), 'desk-lead', now(), '', 'changedesk A-t'
-      from changedesk.updates order by drafted_at limit 1;
+      from changedesk.updates where update_id = 'U-owner-test';
       update changedesk.updates set status = 'approved', approved_by = 'desk-lead', approved_at = now(), decision_id = 'A-t'
-      where update_id = (select update_id from changedesk.updates order by drafted_at limit 1);
+      where update_id = 'U-owner-test';
       insert into changedesk.outbox (outbox_id, update_id, decision_id, audience, to_role, subject, body, approved_by, approved_at, stamp)
-      select 'O-t', update_id, 'A-t', audience, 'Support lead', subject, body, 'desk-lead', now(), 'changedesk A-t'
-      from changedesk.updates order by drafted_at limit 1;
+      select 'O-t', update_id, 'A-t', audience, to_role, subject, body, 'desk-lead', now(), 'changedesk A-t'
+      from changedesk.updates where update_id = 'U-owner-test';
+      select 'placed ' || count(*) from changedesk.outbox where outbox_id = 'O-t';
       update changedesk.outbox set body = 'changed after approval' where outbox_id = 'O-t';""")
+    assert "placed 1" in changed.stdout, "an approved row goes in"
     assert changed.returncode != 0 and "the outbox is add-only" in changed.stderr, changed.stderr
